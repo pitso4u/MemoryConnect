@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model FuneralHome {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  address   String?
+  logoUrl   String?
+  plan      String   @default("professional")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+  memorials Memorial[]
+}
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  passwordHash  String
+  name          String
+  role          String      @default("staff")
+  funeralHomeId String
+  funeralHome   FuneralHome @relation(fields: [funeralHomeId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Memorial {
+  id                    String   @id @default(cuid())
+  slug                  String   @unique
+  deceasedName          String
+  dateOfBirth           DateTime?
+  dateOfDeath           DateTime?
+  serviceDate           DateTime?
+  serviceVenue          String?
+  coverPhotoUrl         String?
+  obituary              String?
+  biography             Json?
+  programme             Json
+  currentProgrammeIndex Int      @default(0)
+  announcements         Json
+  settings              Json
+  status                String   @default("draft")
+  funeralHomeId         String
+  funeralHome           FuneralHome @relation(fields: [funeralHomeId], references: [id])
+  photos                Photo[]
+  tributes              Tribute[]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Photo {
+  id         String   @id @default(cuid())
+  memorialId String
+  memorial   Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  url        String
+  caption    String?
+  category   String   @default("other")
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+}
+
+model Tribute {
+  id         String   @id @default(cuid())
+  memorialId String
+  memorial   Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  authorName String
+  message    String
+  approved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}

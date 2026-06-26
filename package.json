@@ -1,0 +1,31 @@
+{
+  "name": "memorialconnect",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Digital Funeral Program & Memorial Experience Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,admin,memorial -c blue,green,magenta \"npm run dev -w @memorialconnect/api\" \"npm run dev -w @memorialconnect/admin\" \"npm run dev -w @memorialconnect/memorial\"",
+    "dev:api": "npm run dev -w @memorialconnect/api",
+    "dev:admin": "npm run dev -w @memorialconnect/admin",
+    "dev:memorial": "npm run dev -w @memorialconnect/memorial",
+    "build": "npm run build -w @memorialconnect/shared && npm run build -w @memorialconnect/api && npm run build -w @memorialconnect/admin && npm run build -w @memorialconnect/memorial",
+    "db:generate": "npm run db:generate -w @memorialconnect/api",
+    "db:migrate": "npm run db:migrate -w @memorialconnect/api",
+    "db:push": "npm run db:push -w @memorialconnect/api"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.19.1",
+    "@typescript-eslint/parser": "^8.19.1",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
