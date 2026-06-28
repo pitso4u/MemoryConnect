@@ -45,7 +45,7 @@ router.get('/', authenticate, async (req, res) => {
 
     res.json({
       success: true,
-      data: memorials.map((m: any) => formatMemorial(m as unknown as Record<string, unknown>)),
+      data: memorials.map((m) => formatMemorial(m as unknown as Record<string, unknown>)),
     });
   } catch (err) {
     console.error('List memorials error:', err);
@@ -129,10 +129,10 @@ router.patch('/:id', authenticate, async (req, res) => {
       where: { id },
       data: {
         ...rest,
-        biography: biography as any | undefined,
-        programme: programme as any | undefined,
-        announcements: announcements as any | undefined,
-        settings: settings as any | undefined,
+        biography: biography as Prisma.InputJsonValue | undefined,
+        programme: programme as Prisma.InputJsonValue | undefined,
+        announcements: announcements as Prisma.InputJsonValue | undefined,
+        settings: settings as Prisma.InputJsonValue | undefined,
         dateOfBirth: body.dateOfBirth !== undefined
           ? body.dateOfBirth ? new Date(body.dateOfBirth) : null
           : undefined,

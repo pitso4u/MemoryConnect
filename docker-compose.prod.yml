@@ -1,0 +1,54 @@
+services:
+  memoryconnect-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: memoryconnect-api
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    volumes:
+      - ./data:/data
+      - ./uploads:/app/apps/api/uploads
+    networks:
+      - infrastructure_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memoryconnect-api.rule=Host(`api.memoryconnect.co.za`)"
+      - "traefik.http.routers.memoryconnect-api.entrypoints=web,websecure"
+      - "traefik.http.routers.memoryconnect-api.tls=true"
+      - "traefik.http.services.memoryconnect-api.loadbalancer.server.port=4000"
+
+  memoryconnect-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    container_name: memoryconnect-admin
+    restart: unless-stopped
+    networks:
+      - infrastructure_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memoryconnect-admin.rule=Host(`admin.memoryconnect.co.za`)"
+      - "traefik.http.routers.memoryconnect-admin.entrypoints=web,websecure"
+      - "traefik.http.routers.memoryconnect-admin.tls=true"
+      - "traefik.http.services.memoryconnect-admin.loadbalancer.server.port=80"
+
+  memoryconnect-public:
+    build:
+      context: .
+      dockerfile: Dockerfile.memorial
+    container_name: memoryconnect-public
+    restart: unless-stopped
+    networks:
+      - infrastructure_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memoryconnect-public.rule=Host(`memoryconnect.co.za`) || Host(`www.memoryconnect.co.za`)"
+      - "traefik.http.routers.memoryconnect-public.entrypoints=web,websecure"
+      - "traefik.http.routers.memoryconnect-public.tls=true"
+      - "traefik.http.services.memoryconnect-public.loadbalancer.server.port=80"
+
+networks:
+  infrastructure_default:
+    external: true

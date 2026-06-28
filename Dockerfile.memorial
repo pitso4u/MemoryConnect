@@ -1,0 +1,20 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY apps/memorial/package*.json apps/memorial/
+COPY packages packages
+
+RUN npm install
+
+COPY . .
+
+RUN npm run build -w @memorialconnect/shared
+RUN npm run build -w @memorialconnect/memorial
+
+FROM nginx:alpine
+
+COPY --from=builder /app/apps/memorial/dist /usr/share/nginx/html
+COPY nginx/public.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
