@@ -8,6 +8,7 @@
   --color-parchment: #f5f0e8;
   --color-gold: #c9a84c;
   --color-gold-light: #dfc06e;
+  --color-gold-dark: #a68a3a;
   --color-muted: #8a8580;
 }
 
@@ -34,3 +35,44 @@ body {
 .animate-fade-up-delay-1 { animation-delay: 0.1s; }
 .animate-fade-up-delay-2 { animation-delay: 0.2s; }
 .animate-fade-up-delay-3 { animation-delay: 0.3s; }
+
+html {
+  scroll-behavior: smooth;
+}
+
+.marketing-page {
+  font-family: var(--font-body);
+}
+
+.eyebrow {
+  color: var(--color-gold-dark, #a68a3a);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.hero-glow {
+  background:
+    radial-gradient(circle at 76% 36%, rgb(201 168 76 / 0.16), transparent 27rem),
+    radial-gradient(circle at 12% 86%, rgb(223 192 110 / 0.08), transparent 24rem);
+}
+
+.hero-grain {
+  background-image: radial-gradient(rgb(245 240 232 / 0.08) 0.7px, transparent 0.7px);
+  background-size: 5px 5px;
+}
+
+.final-cta-lines {
+  background-image: repeating-linear-gradient(115deg, transparent 0, transparent 34px, rgb(26 26 46 / 0.22) 35px, transparent 36px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-fade-up,
+  .animate-fade-up-delay-1,
+  .animate-fade-up-delay-2,
+  .animate-fade-up-delay-3 {
+    animation: none;
+  }
+}

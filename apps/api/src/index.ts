@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth';
 import memorialRoutes from './routes/memorials';
 import photoRoutes from './routes/photos';
+import locationRoutes from './routes/locations';
 import publicRoutes from './routes/public';
 import { UPLOADS_DIR } from './lib/uploads';
 import { printServerUrls } from './lib/network';
@@ -80,12 +81,14 @@ app.get('/health', (_req, res) => {
 // API v1 routes
 app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/memorials', memorialRoutes);
+app.use('/api/v1/memorials/:id/locations', locationRoutes);
 app.use('/api/v1/memorials/:id/photos', photoRoutes);
 app.use('/api/v1/public', publicRoutes);
 
 // Legacy routes for backward compatibility (will be deprecated)
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/memorials', memorialRoutes);
+app.use('/api/memorials/:id/locations', locationRoutes);
 app.use('/api/memorials/:id/photos', photoRoutes);
 app.use('/api/m', publicRoutes);
 
@@ -93,7 +96,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 app.listen(PORT, HOST, () => {
-  console.log(`\n🚀 MemorialConnect API v1`);
+  console.log(`\n🚀 Memory Connect API v1`);
   console.log(`   Environment: ${env.NODE_ENV}`);
   console.log(`   Host: ${HOST}`);
   console.log(`   Port: ${PORT}`);

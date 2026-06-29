@@ -58,6 +58,23 @@ export interface Memorial extends MemorialSummary {
   currentProgrammeIndex: number;
   announcements: Announcement[];
   settings: MemorialSettings;
+  locations?: MemorialLocation[];
+}
+
+export type MemorialLocationType = 'HOME' | 'CHURCH' | 'CEMETERY' | 'RECEPTION' | 'OTHER';
+
+export interface MemorialLocation {
+  id: string;
+  memorialId: string;
+  type: MemorialLocationType;
+  name: string;
+  addressText?: string | null;
+  latitude: number;
+  longitude: number;
+  notes?: string | null;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -229,6 +246,33 @@ export const updateMemorialSchema = z.object({
   settings: z.any().optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
 });
+
+export const memorialLocationTypeSchema = z.enum([
+  'HOME',
+  'CHURCH',
+  'CEMETERY',
+  'RECEPTION',
+  'OTHER',
+]);
+
+export const createMemorialLocationSchema = z.object({
+  type: memorialLocationTypeSchema,
+  name: z.string().trim().min(1, 'Location name is required').max(120),
+  addressText: z.string().trim().max(300).optional().nullable(),
+  latitude: z.number({ required_error: 'Latitude is required' })
+    .min(-90, 'Latitude must be between -90 and 90')
+    .max(90, 'Latitude must be between -90 and 90'),
+  longitude: z.number({ required_error: 'Longitude is required' })
+    .min(-180, 'Longitude must be between -180 and 180')
+    .max(180, 'Longitude must be between -180 and 180'),
+  notes: z.string().trim().max(500).optional().nullable(),
+  orderIndex: z.number().int().min(0).optional(),
+});
+
+export const updateMemorialLocationSchema = createMemorialLocationSchema.partial();
+
+export type CreateMemorialLocationInput = z.infer<typeof createMemorialLocationSchema>;
+export type UpdateMemorialLocationInput = z.infer<typeof updateMemorialLocationSchema>;
 
 /**
  * Validation schema for programme item

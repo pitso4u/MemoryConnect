@@ -34,7 +34,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="font-display text-3xl text-ink">MemorialConnect</h1>
+          <h1 className="font-display text-3xl text-ink">Memory Connect</h1>
           <p className="text-muted mt-2">Register your funeral home</p>
         </div>
 

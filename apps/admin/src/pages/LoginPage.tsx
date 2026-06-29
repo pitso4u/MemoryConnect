@@ -33,7 +33,7 @@ export default function LoginPage() {
           style={{ backgroundImage: 'radial-gradient(circle at 30% 50%, var(--color-gold) 0%, transparent 60%)' }}
         />
         <div className="relative text-center px-12">
-          <h1 className="font-display text-5xl text-parchment mb-4">MemorialConnect</h1>
+          <h1 className="font-display text-5xl text-parchment mb-4">Memory Connect</h1>
           <p className="text-parchment/70 text-lg font-light max-w-md">
             Honour every life with a beautiful digital memorial experience.
           </p>
@@ -43,7 +43,7 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
           <div className="lg:hidden mb-8 text-center">
-            <h1 className="font-display text-3xl text-ink">MemorialConnect</h1>
+            <h1 className="font-display text-3xl text-ink">Memory Connect</h1>
           </div>
 
           <h2 className="font-display text-2xl text-ink mb-1">Welcome back</h2>
@@ -57,8 +57,9 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Email</label>
+              <label htmlFor="email" className="block text-sm font-medium text-ink mb-1.5">Email</label>
               <input
+                id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -67,8 +68,9 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-ink mb-1.5">Password</label>
+              <label htmlFor="password" className="block text-sm font-medium text-ink mb-1.5">Password</label>
               <input
+                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

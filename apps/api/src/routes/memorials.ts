@@ -95,7 +95,11 @@ router.get('/:id', authenticate, async (req, res) => {
   const id = paramId(req);
   const memorial = await prisma.memorial.findFirst({
     where: { id, funeralHomeId: req.user!.funeralHomeId },
-    include: { photos: { orderBy: { order: 'asc' } }, tributes: { orderBy: { createdAt: 'desc' } } },
+    include: {
+      photos: { orderBy: { order: 'asc' } },
+      tributes: { orderBy: { createdAt: 'desc' } },
+      locations: { orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
+    },
   });
 
   if (!memorial) {
@@ -108,6 +112,7 @@ router.get('/:id', authenticate, async (req, res) => {
       ...formatMemorial(memorial as unknown as Record<string, unknown>),
       photos: memorial.photos,
       tributes: memorial.tributes,
+      locations: memorial.locations,
     },
   });
 });

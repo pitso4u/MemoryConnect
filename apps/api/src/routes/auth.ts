@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticate, signToken } from '../middleware/auth';
 import { registerSchema, loginSchema } from '@memorialconnect/shared';
+import { isZodError } from '../lib/validation';
 
 const router = Router();
 
@@ -53,7 +53,7 @@ router.post('/register', async (req, res) => {
       },
     });
   } catch (err) {
-    if (err instanceof z.ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ success: false, error: err.errors[0].message });
     }
     console.error(err);
@@ -93,7 +93,7 @@ router.post('/login', async (req, res) => {
       },
     });
   } catch (err) {
-    if (err instanceof z.ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ success: false, error: err.errors[0].message });
     }
     res.status(500).json({ success: false, error: 'Login failed' });

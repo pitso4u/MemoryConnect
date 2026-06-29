@@ -94,7 +94,7 @@ export default function MemorialsPage() {
                 </span>
               </div>
               <p className="text-xs text-muted mt-3">
-                memorialconnect.co.za/{m.slug}
+                memoryconnect.co.za/{m.slug}
               </p>
             </Link>
           ))}

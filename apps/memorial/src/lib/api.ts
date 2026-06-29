@@ -5,6 +5,7 @@ import type {
   Tribute,
   Memorial,
   Announcement,
+  MemorialLocation,
 } from '@memorialconnect/shared';
 
 const API_URL = getApiUrl();
@@ -51,6 +52,7 @@ export interface PublicMemorial extends Memorial {
   funeralHome: { name: string; phone?: string; logoUrl?: string };
   photos: Photo[];
   tributes: Tribute[];
+  locations: MemorialLocation[];
 }
 
 export interface ProjectorData {
@@ -62,7 +64,7 @@ export interface ProjectorData {
   announcements: Announcement[];
 }
 
-export type { ProgrammeItem, Photo, Tribute, Announcement };
+export type { ProgrammeItem, Photo, Tribute, Announcement, MemorialLocation };
 
 export const api = {
   getMemorial: (slug: string) => request<PublicMemorial>(`/api/v1/public/memorials/${slug}`),

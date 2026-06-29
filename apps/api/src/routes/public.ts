@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { formatMemorial } from '../lib/utils';
 import { tributeSchema } from '@memorialconnect/shared';
+import { isZodError } from '../lib/validation';
 
 const router = Router();
 
@@ -12,6 +12,7 @@ router.get('/memorials/:slug', async (req, res) => {
     include: {
       photos: { orderBy: { order: 'asc' } },
       tributes: { where: { approved: true }, orderBy: { createdAt: 'desc' } },
+      locations: { orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
       funeralHome: { select: { name: true, phone: true, logoUrl: true } },
     },
   });
@@ -26,6 +27,7 @@ router.get('/memorials/:slug', async (req, res) => {
       ...formatMemorial(memorial as unknown as Record<string, unknown>),
       photos: memorial.photos,
       tributes: memorial.tributes,
+      locations: memorial.locations,
       funeralHome: memorial.funeralHome,
     },
   });
@@ -94,7 +96,7 @@ router.post('/memorials/:slug/tributes', async (req, res) => {
       },
     });
   } catch (err) {
-    if (err instanceof z.ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ success: false, message: err.errors[0].message });
     }
     res.status(500).json({ success: false, message: 'Failed to submit tribute' });
