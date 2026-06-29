@@ -40,3 +40,7 @@ uploads/
 dev-dist/
 sw.js
 workbox-*.js
+
+apps/admin/.env.production
+apps/memorial/.env.production
+data/
