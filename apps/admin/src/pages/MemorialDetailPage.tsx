@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api, MemorialDetail, ProgrammeItem } from '../lib/api';
 import MemorialQrCode from '../components/MemorialQrCode';
 import { MemorialHeader } from '../components/memorial/MemorialHeader';
@@ -23,6 +23,7 @@ export default function MemorialDetailPage() {
   const [photoCaption, setPhotoCaption] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [publishError, setPublishError] = useState('');
 
   const load = () => {
     if (!id) return;
@@ -55,13 +56,14 @@ export default function MemorialDetailPage() {
   const handlePublish = async () => {
     if (!id || !memorial) return;
     setSaving(true);
+    setPublishError('');
     try {
       const updated = await api.updateMemorial(id, {
         status: memorial.status === 'published' ? 'draft' : 'published',
       } as Partial<MemorialDetail>);
       setMemorial({ ...memorial, status: updated.status });
     } catch (err) {
-      console.error(err);
+      setPublishError(err instanceof Error ? err.message : 'Could not update publishing status');
     } finally {
       setSaving(false);
     }
@@ -149,6 +151,13 @@ export default function MemorialDetailPage() {
   return (
     <div className="p-8">
       <MemorialHeader memorial={memorial} saving={saving} onPublish={handlePublish} />
+
+      {publishError && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span>{publishError}</span>
+          <Link to="/billing" className="font-semibold underline underline-offset-2">Open plan & billing</Link>
+        </div>
+      )}
 
       {/* Live Control Bar */}
       <ProjectorControls

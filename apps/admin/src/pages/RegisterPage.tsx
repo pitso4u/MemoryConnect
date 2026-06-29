@@ -22,7 +22,7 @@ export default function RegisterPage() {
     try {
       const data = await api.register(form);
       login(data.accessToken, data.user);
-      navigate('/');
+      navigate('/billing');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {

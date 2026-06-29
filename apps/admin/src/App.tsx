@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage';
 import MemorialsPage from './pages/MemorialsPage';
 import CreateMemorialPage from './pages/CreateMemorialPage';
 import MemorialDetailPage from './pages/MemorialDetailPage';
+import BillingPage from './pages/BillingPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, isLoading } = useAuth();
@@ -31,6 +32,7 @@ function AppRoutes() {
         <Route index element={<MemorialsPage />} />
         <Route path="create" element={<CreateMemorialPage />} />
         <Route path="memorial/:id" element={<MemorialDetailPage />} />
+        <Route path="billing" element={<BillingPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

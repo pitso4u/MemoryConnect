@@ -4,8 +4,14 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 import { createMemorialSlug, formatMemorial } from '../lib/utils';
+import { canPublishAnotherMemorial, getActiveSubscription, getUsage } from '../lib/billing';
+import { isZodError } from '../lib/validation';
 
 const router = Router();
+
+function rand(cents: number) {
+  return `R${(cents / 100).toFixed(2)}`;
+}
 
 function paramId(req: Request): string {
   const id = req.params.id;
@@ -57,6 +63,20 @@ router.post('/', authenticate, async (req, res) => {
   try {
     const body = createSchema.parse(req.body);
     const slug = createMemorialSlug();
+    const activeSubscription = await getActiveSubscription(req.user!.funeralHomeId);
+    if (!activeSubscription) {
+      const existingDemo = await prisma.memorial.findFirst({
+        where: { funeralHomeId: req.user!.funeralHomeId, isDemo: true },
+        select: { id: true },
+      });
+      if (existingDemo) {
+        return res.status(402).json({
+          success: false,
+          code: 'BILLING_REQUIRED',
+          error: 'Your free demo memorial is already in use. Activate a Memory Connect plan to create real funeral memorials.',
+        });
+      }
+    }
 
     const memorial = await prisma.memorial.create({
       data: {
@@ -67,6 +87,7 @@ router.post('/', authenticate, async (req, res) => {
         serviceDate: body.serviceDate ? new Date(body.serviceDate) : null,
         serviceVenue: body.serviceVenue,
         funeralHomeId: req.user!.funeralHomeId,
+        isDemo: !activeSubscription,
         programme: [],
         announcements: [],
         settings: {
@@ -83,7 +104,7 @@ router.post('/', authenticate, async (req, res) => {
       data: formatMemorial(memorial as unknown as Record<string, unknown>),
     });
   } catch (err) {
-    if (err instanceof z.ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ success: false, error: err.errors[0].message });
     }
     console.error('Create memorial error:', err);
@@ -134,6 +155,31 @@ router.patch('/:id', authenticate, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Memorial not found' });
     }
 
+    let subscription: Awaited<ReturnType<typeof getActiveSubscription>> = null;
+    let shouldRecordUsage = false;
+    if (body.status === 'published' && existing.status !== 'published' && !existing.isDemo) {
+      subscription = await getActiveSubscription(req.user!.funeralHomeId);
+      if (!subscription) {
+        return res.status(402).json({
+          success: false,
+          code: 'BILLING_REQUIRED',
+          error: 'Activate a Memory Connect plan before publishing this memorial.',
+        });
+      }
+      const existingUsage = await prisma.usageLedger.findUnique({ where: { memorialId: id } });
+      if (!existingUsage) {
+        const usage = await getUsage(req.user!.funeralHomeId, subscription);
+        if (!canPublishAnotherMemorial(usage)) {
+          return res.status(402).json({
+            success: false,
+            code: 'MEMORIAL_LIMIT_REACHED',
+            error: `You have used all included funerals for this billing cycle. Pay ${rand(subscription.plan.extraMemorialAmount)} for one extra funeral memorial, or upgrade your plan.`,
+          });
+        }
+        shouldRecordUsage = true;
+      }
+    }
+
     const { biography, programme, announcements, settings, ...rest } = body;
     const memorial = await prisma.memorial.update({
       where: { id },
@@ -155,12 +201,24 @@ router.patch('/:id', authenticate, async (req, res) => {
       },
     });
 
+    if (shouldRecordUsage && subscription) {
+      await prisma.usageLedger.create({
+        data: {
+          funeralHomeId: req.user!.funeralHomeId,
+          subscriptionId: subscription.id,
+          memorialId: id,
+          periodStart: subscription.currentPeriodStart!,
+          periodEnd: subscription.currentPeriodEnd!,
+        },
+      });
+    }
+
     res.json({
       success: true,
       data: formatMemorial(memorial as unknown as Record<string, unknown>),
     });
   } catch (err) {
-    if (err instanceof z.ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ success: false, error: err.errors[0].message });
     }
     res.status(500).json({ success: false, error: 'Failed to update memorial' });

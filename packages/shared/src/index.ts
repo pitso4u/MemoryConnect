@@ -59,6 +59,56 @@ export interface Memorial extends MemorialSummary {
   announcements: Announcement[];
   settings: MemorialSettings;
   locations?: MemorialLocation[];
+  isDemo?: boolean;
+}
+
+export type PlanCode = 'starter' | 'professional' | 'unlimited';
+export type PaymentKind = 'subscription' | 'extra_memorial';
+export type PaymentStatus = 'pending' | 'success' | 'failed';
+export type SubscriptionStatus = 'pending' | 'active' | 'attention' | 'non-renewing' | 'cancelled' | 'expired';
+
+export interface BillingPlan {
+  code: PlanCode;
+  name: string;
+  amount: number;
+  currency: 'ZAR';
+  interval: 'monthly';
+  memorialLimit: number;
+  extraMemorialAmount: number;
+  fairUseUnlimited: boolean;
+  checkoutAvailable: boolean;
+}
+
+export interface BillingPayment {
+  id: string;
+  kind: PaymentKind;
+  status: PaymentStatus;
+  amount: number;
+  currency: string;
+  paystackReference: string;
+  paidAt?: string | null;
+  createdAt: string;
+}
+
+export interface BillingStatus {
+  checkoutAvailable: boolean;
+  plan: BillingPlan;
+  plans: BillingPlan[];
+  subscription: {
+    status: SubscriptionStatus;
+    planCode: PlanCode;
+    currentPeriodStart?: string | null;
+    currentPeriodEnd?: string | null;
+    cancelAtPeriodEnd: boolean;
+  } | null;
+  usage: {
+    memorialsUsed: number;
+    memorialLimit: number;
+    extraCredits: number;
+    unlimited: boolean;
+    remaining: number | null;
+  };
+  payments: BillingPayment[];
 }
 
 export type MemorialLocationType = 'HOME' | 'CHURCH' | 'CEMETERY' | 'RECEPTION' | 'OTHER';
@@ -169,7 +219,7 @@ export interface FuneralHome {
   phone?: string;
   address?: string;
   logoUrl?: string;
-  plan: 'single' | 'professional' | 'enterprise';
+  plan: 'demo' | 'starter' | 'single' | 'professional' | 'unlimited' | 'enterprise';
 }
 
 /**

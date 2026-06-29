@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Plus, LayoutDashboard } from 'lucide-react';
+import { CreditCard, LogOut, Plus, LayoutDashboard } from 'lucide-react';
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
@@ -33,6 +33,13 @@ export default function DashboardLayout() {
           >
             <Plus size={18} />
             New Memorial
+          </Link>
+          <Link
+            to="/billing"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/10 transition text-sm"
+          >
+            <CreditCard size={18} />
+            Plan & Billing
           </Link>
         </nav>
 

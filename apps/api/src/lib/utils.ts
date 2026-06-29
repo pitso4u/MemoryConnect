@@ -30,6 +30,7 @@ export function formatMemorial(memorial: Record<string, unknown>) {
     announcements: memorial.announcements,
     settings: memorial.settings,
     status: memorial.status,
+    isDemo: memorial.isDemo,
     createdAt: (memorial.createdAt as Date).toISOString(),
     updatedAt: (memorial.updatedAt as Date).toISOString(),
   };

@@ -8,6 +8,9 @@ import type {
   MemorialLocation,
   CreateMemorialLocationInput,
   UpdateMemorialLocationInput,
+  BillingStatus,
+  PaymentKind,
+  PlanCode,
 } from '@memorialconnect/shared';
 
 const API_URL = getApiUrl();
@@ -139,6 +142,17 @@ export const api = {
 
   deleteLocation: (memorialId: string, locationId: string) =>
     request<null>(`/api/v1/memorials/${memorialId}/locations/${locationId}`, { method: 'DELETE' }),
+
+  getBillingStatus: () => request<BillingStatus>('/api/v1/billing/status'),
+
+  initializePayment: (kind: PaymentKind, planCode?: PlanCode) =>
+    request<{ authorization_url: string; access_code: string; reference: string }>('/api/v1/billing/initialize', {
+      method: 'POST',
+      body: JSON.stringify({ kind, planCode }),
+    }),
+
+  verifyPayment: (reference: string) =>
+    request<BillingStatus>(`/api/v1/billing/verify/${encodeURIComponent(reference)}`),
 };
 
 interface MemorialDetail extends Memorial {
@@ -172,4 +186,7 @@ export type {
   MemorialLocation,
   CreateMemorialLocationInput,
   UpdateMemorialLocationInput,
+  BillingStatus,
+  PaymentKind,
+  PlanCode,
 };

@@ -199,6 +199,37 @@ DATABASE_URL=postgresql://user:password@host:5432/memorialconnect
 - QR code generation with local-network demo support
 - Offline PWA support
 
+## Paystack Billing
+
+Memory Connect v1.2.0 supports three funeral-home subscription tiers:
+
+| Plan | Price | Included funerals/memorials | Extra funeral |
+|------|-------|--------------------|----------------|
+| Starter | **R499.99/month** | 5/month | R149.99 each |
+| Professional | **R999.99/month** | 15/month | R149.99 each |
+| Unlimited | **R1,999.99/month** | Unlimited | Not needed |
+
+A funeral means one published memorial/event page. Draft memorials do not count against the monthly limit. Usage resets every billing cycle.
+
+1. In the Paystack dashboard, create monthly ZAR plans for R499.99, R999.99, and R1,999.99.
+2. Add these values to `.env.production` on the VM:
+
+   ```env
+   PAYSTACK_SECRET_KEY=sk_live_your_key
+   PAYSTACK_STARTER_PLAN_CODE=PLN_starter_plan_code
+   PAYSTACK_PROFESSIONAL_PLAN_CODE=PLN_professional_plan_code
+   PAYSTACK_UNLIMITED_PLAN_CODE=PLN_unlimited_plan_code
+   ADMIN_URL=https://admin.memoryconnect.co.za
+   ```
+
+3. Configure the Paystack webhook URL:
+
+   ```text
+   https://api.memoryconnect.co.za/api/v1/billing/webhook
+   ```
+
+Use Paystack test keys and a test plan before switching to live keys. The API verifies every checkout server-side and validates webhook signatures before changing subscription access.
+
 ## License
 
 Proprietary — Pitso Soetsang

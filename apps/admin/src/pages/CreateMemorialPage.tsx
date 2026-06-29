@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
 export default function CreateMemorialPage() {
@@ -33,7 +33,10 @@ export default function CreateMemorialPage() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
-          {error}
+          {error}{' '}
+          {(error.includes('Starter') || error.includes('demo')) && (
+            <Link to="/billing" className="font-semibold underline underline-offset-2">View plan</Link>
+          )}
         </div>
       )}
 

@@ -9,6 +9,7 @@ import memorialRoutes from './routes/memorials';
 import photoRoutes from './routes/photos';
 import locationRoutes from './routes/locations';
 import publicRoutes from './routes/public';
+import billingRoutes from './routes/billing';
 import { UPLOADS_DIR } from './lib/uploads';
 import { printServerUrls } from './lib/network';
 import { env } from './lib/env';
@@ -71,7 +72,12 @@ if (env.NODE_ENV === 'production') {
   app.use(morgan('dev'));
 }
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buffer) => {
+    (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+  },
+}));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.get('/health', (_req, res) => {
@@ -84,6 +90,7 @@ app.use('/api/v1/memorials', memorialRoutes);
 app.use('/api/v1/memorials/:id/locations', locationRoutes);
 app.use('/api/v1/memorials/:id/photos', photoRoutes);
 app.use('/api/v1/public', publicRoutes);
+app.use('/api/v1/billing', billingRoutes);
 
 // Legacy routes for backward compatibility (will be deprecated)
 app.use('/api/auth', authLimiter, authRoutes);

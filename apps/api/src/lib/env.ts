@@ -10,6 +10,10 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   ADMIN_URL: z.string().optional(),
   MEMORIAL_URL: z.string().optional(),
+  PAYSTACK_SECRET_KEY: z.string().optional(),
+  PAYSTACK_STARTER_PLAN_CODE: z.string().optional(),
+  PAYSTACK_PROFESSIONAL_PLAN_CODE: z.string().optional(),
+  PAYSTACK_UNLIMITED_PLAN_CODE: z.string().optional(),
 });
 
 export function validateEnv() {

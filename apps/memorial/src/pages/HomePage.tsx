@@ -30,6 +30,30 @@ const features = [
   { icon: MessageCircleHeart, label: 'Tributes' },
 ];
 
+const pricingPlans = [
+  {
+    name: 'Starter',
+    price: 'R499.99',
+    included: '5 funerals/memorials per month',
+    extra: 'R149.99 per extra funeral after limit',
+    featured: false,
+  },
+  {
+    name: 'Professional',
+    price: 'R999.99',
+    included: '15 funerals/memorials per month',
+    extra: 'R149.99 per extra funeral after limit',
+    featured: true,
+  },
+  {
+    name: 'Unlimited',
+    price: 'R1999.99',
+    included: 'Unlimited funerals/memorials',
+    extra: 'No extra funeral charge',
+    featured: false,
+  },
+];
+
 function getAdminUrl(path: string) {
   const configuredUrl = import.meta.env.VITE_ADMIN_URL;
   if (configuredUrl) return `${configuredUrl.replace(/\/$/, '')}${path}`;
@@ -178,38 +202,51 @@ export default function HomePage() {
                 <h2 className="mt-5 font-display text-5xl font-semibold leading-none sm:text-7xl">Start small.<br />Serve beautifully.</h2>
               </div>
               <p className="max-w-lg text-lg leading-8 text-ink/55 lg:justify-self-end">
-                A straightforward monthly plan for independent funeral homes. No complicated tiers, no surprise platform fees.
+                Funeral-count packages for published memorial/event pages. Drafts do not count, and usage resets every billing cycle.
               </p>
             </div>
 
-            <div className="mt-14 grid overflow-hidden rounded-[2rem] bg-ink text-parchment shadow-2xl shadow-ink/15 lg:grid-cols-[1fr_0.82fr]">
-              <div className="p-8 sm:p-12 lg:p-16">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gold-light">Memory Connect Starter</p>
-                <div className="mt-6 flex items-end gap-3">
-                  <span className="font-display text-7xl font-semibold tracking-tight sm:text-8xl">R499</span>
-                  <span className="pb-3 text-parchment/45">/ month</span>
-                </div>
-                <p className="mt-5 max-w-lg text-lg leading-8 text-parchment/60">Everything your team needs to offer a polished digital memorial with every service.</p>
-                <a href={registerUrl} className="group mt-9 inline-flex items-center gap-2 rounded-full bg-gold px-7 py-3.5 font-semibold text-ink transition hover:bg-gold-light">
-                  Create funeral home account
-                  <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
-                </a>
-              </div>
-              <div className="border-t border-white/10 bg-white/[0.035] p-8 sm:p-12 lg:border-l lg:border-t-0 lg:p-16">
-                <p className="font-display text-2xl font-semibold">Included every month</p>
-                <ul className="mt-7 space-y-4 text-parchment/75">
-                  {['5 complete memorial pages', 'QR code for every memorial', 'Programme, biography and gallery', 'Tribute wall and map directions', 'Memorial hosting included'].map((item) => (
-                    <li key={item} className="flex items-center gap-3">
-                      <span className="grid h-6 w-6 place-items-center rounded-full bg-gold/15 text-gold-light"><Check size={14} strokeWidth={2} /></span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-9 border-t border-white/10 pt-7">
-                  <p className="text-sm text-parchment/45">Need more in a busy month?</p>
-                  <p className="mt-1 font-display text-3xl">R149 <span className="font-body text-base text-parchment/50">per extra memorial</span></p>
-                </div>
-              </div>
+            <div className="mt-14 grid gap-5 lg:grid-cols-3">
+              {pricingPlans.map((plan) => (
+                <article
+                  key={plan.name}
+                  className={`relative overflow-hidden rounded-[2rem] p-8 shadow-2xl shadow-ink/10 ${
+                    plan.featured ? 'bg-ink text-parchment' : 'border border-ink/10 bg-white text-ink'
+                  }`}
+                >
+                  {plan.featured && (
+                    <span className="absolute right-6 top-6 rounded-full bg-gold px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-ink">
+                      Popular
+                    </span>
+                  )}
+                  <p className={`text-xs font-semibold uppercase tracking-[0.24em] ${plan.featured ? 'text-gold-light' : 'text-gold-dark'}`}>
+                    Memory Connect {plan.name}
+                  </p>
+                  <div className="mt-6 flex items-end gap-3">
+                    <span className="font-display text-5xl font-semibold tracking-tight sm:text-6xl">{plan.price}</span>
+                    <span className={`pb-2 ${plan.featured ? 'text-parchment/45' : 'text-ink/45'}`}>/ month</span>
+                  </div>
+                  <ul className={`mt-8 space-y-4 ${plan.featured ? 'text-parchment/75' : 'text-ink/60'}`}>
+                    {[plan.included, plan.extra, 'QR code, programme, gallery and tributes', 'Exact GPS directions and map pins'].map((item) => (
+                      <li key={item} className="flex items-start gap-3">
+                        <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full ${plan.featured ? 'bg-gold/15 text-gold-light' : 'bg-gold/15 text-gold-dark'}`}>
+                          <Check size={14} strokeWidth={2} />
+                        </span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                  <a
+                    href={registerUrl}
+                    className={`group mt-9 inline-flex items-center gap-2 rounded-full px-6 py-3 font-semibold transition ${
+                      plan.featured ? 'bg-gold text-ink hover:bg-gold-light' : 'bg-ink text-parchment hover:bg-ink-light'
+                    }`}
+                  >
+                    Choose {plan.name}
+                    <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
+                  </a>
+                </article>
+              ))}
             </div>
           </div>
         </section>

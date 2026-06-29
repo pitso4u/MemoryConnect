@@ -8,17 +8,20 @@ datasource db {
 }
 
 model FuneralHome {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  phone     String?
-  address   String?
-  logoUrl   String?
-  plan      String   @default("professional")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  users     User[]
-  memorials Memorial[]
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  phone         String?
+  address       String?
+  logoUrl       String?
+  plan          String         @default("demo")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  users         User[]
+  memorials     Memorial[]
+  subscriptions Subscription[]
+  payments      Payment[]
+  usageLedger   UsageLedger[]
 }
 
 model User {
@@ -34,8 +37,8 @@ model User {
 }
 
 model Memorial {
-  id                    String   @id @default(cuid())
-  slug                  String   @unique
+  id                    String             @id @default(cuid())
+  slug                  String             @unique
   deceasedName          String
   dateOfBirth           DateTime?
   dateOfDeath           DateTime?
@@ -45,17 +48,98 @@ model Memorial {
   obituary              String?
   biography             Json?
   programme             Json
-  currentProgrammeIndex Int      @default(0)
+  currentProgrammeIndex Int                @default(0)
   announcements         Json
   settings              Json
-  status                String   @default("draft")
+  status                String             @default("draft")
+  isDemo                Boolean            @default(false)
   funeralHomeId         String
-  funeralHome           FuneralHome @relation(fields: [funeralHomeId], references: [id])
+  funeralHome           FuneralHome        @relation(fields: [funeralHomeId], references: [id])
   locations             MemorialLocation[]
   photos                Photo[]
   tributes              Tribute[]
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  usageLedger           UsageLedger?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+}
+
+model Plan {
+  id                  String         @id @default(cuid())
+  code                String         @unique
+  name                String
+  amount              Int
+  currency            String         @default("ZAR")
+  interval            String         @default("monthly")
+  memorialLimit       Int
+  extraMemorialAmount Int
+  fairUseUnlimited    Boolean        @default(false)
+  active              Boolean        @default(true)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  subscriptions       Subscription[]
+  payments            Payment[]
+}
+
+model Subscription {
+  id                       String        @id @default(cuid())
+  funeralHomeId            String
+  funeralHome              FuneralHome   @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  planId                   String
+  plan                     Plan          @relation(fields: [planId], references: [id])
+  status                   String        @default("pending")
+  paystackCustomerCode     String?
+  paystackSubscriptionCode String?       @unique
+  paystackEmailToken       String?
+  currentPeriodStart       DateTime?
+  currentPeriodEnd         DateTime?
+  cancelAtPeriodEnd        Boolean       @default(false)
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+  payments                 Payment[]
+  usageLedger              UsageLedger[]
+
+  @@unique([funeralHomeId])
+  @@index([status, currentPeriodEnd])
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  funeralHomeId         String
+  funeralHome           FuneralHome   @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  subscriptionId        String?
+  subscription          Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  planId                String?
+  plan                  Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
+  kind                  String
+  status                String        @default("pending")
+  amount                Int
+  currency              String        @default("ZAR")
+  paystackReference     String        @unique
+  paystackTransactionId String?
+  paidAt                DateTime?
+  failureMessage        String?
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([funeralHomeId, status, createdAt])
+}
+
+model UsageLedger {
+  id             String        @id @default(cuid())
+  funeralHomeId  String
+  funeralHome    FuneralHome   @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  memorialId     String        @unique
+  memorial       Memorial      @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  type           String        @default("memorial_published")
+  quantity       Int           @default(1)
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime      @default(now())
+
+  @@index([funeralHomeId, periodStart, periodEnd])
 }
 
 model MemorialLocation {
