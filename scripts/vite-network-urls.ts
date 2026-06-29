@@ -16,7 +16,7 @@ export function networkUrlsPlugin(label: string, port: number): Plugin {
         }
 
         const apiPort = process.env.VITE_API_PORT || process.env.PORT || '4000';
-        console.log(`\n  MemorialConnect ${label}`);
+        console.log(`\n  Memory Connect ${label}`);
         console.log(`  ➜  Local:   http://localhost:${port}/`);
         for (const ip of addresses) {
           console.log(`  ➜  Network: http://${ip}:${port}/`);

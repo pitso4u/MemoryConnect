@@ -1,34 +1,41 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { formatMemorial } from '../lib/utils';
 import { tributeSchema } from '@memorialconnect/shared';
+import { isZodError } from '../lib/validation';
 
 const router = Router();
 
 router.get('/memorials/:slug', async (req, res) => {
-  const memorial = await prisma.memorial.findFirst({
-    where: { slug: req.params.slug, status: 'published' },
-    include: {
-      photos: { orderBy: { order: 'asc' } },
-      tributes: { where: { approved: true }, orderBy: { createdAt: 'desc' } },
-      funeralHome: { select: { name: true, phone: true, logoUrl: true } },
-    },
-  });
+  try {
+    const memorial = await prisma.memorial.findFirst({
+      where: { slug: req.params.slug, status: 'published' },
+      include: {
+        photos: { orderBy: { order: 'asc' } },
+        tributes: { where: { approved: true }, orderBy: { createdAt: 'desc' } },
+        locations: { orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
+        funeralHome: { select: { name: true, phone: true, logoUrl: true } },
+      },
+    });
 
-  if (!memorial) {
-    return res.status(404).json({ success: false, message: 'Memorial not found' });
+    if (!memorial) {
+      return res.status(404).json({ success: false, message: 'Memorial not found' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...formatMemorial(memorial as unknown as Record<string, unknown>),
+        photos: memorial.photos,
+        tributes: memorial.tributes,
+        locations: memorial.locations,
+        funeralHome: memorial.funeralHome,
+      },
+    });
+  } catch (error) {
+    console.error('Get public memorial error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load memorial' });
   }
-
-  res.json({
-    success: true,
-    data: {
-      ...formatMemorial(memorial as unknown as Record<string, unknown>),
-      photos: memorial.photos,
-      tributes: memorial.tributes,
-      funeralHome: memorial.funeralHome,
-    },
-  });
 });
 
 router.get('/memorials/:slug/projector', async (req, res) => {
@@ -94,7 +101,7 @@ router.post('/memorials/:slug/tributes', async (req, res) => {
       },
     });
   } catch (err) {
-    if (err instanceof z.ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ success: false, message: err.errors[0].message });
     }
     res.status(500).json({ success: false, message: 'Failed to submit tribute' });

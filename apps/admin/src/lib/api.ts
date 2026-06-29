@@ -5,6 +5,9 @@ import type {
   MemorialSettings,
   Photo,
   Tribute,
+  MemorialLocation,
+  CreateMemorialLocationInput,
+  UpdateMemorialLocationInput,
 } from '@memorialconnect/shared';
 
 const API_URL = getApiUrl();
@@ -118,12 +121,31 @@ export const api = {
 
   deletePhoto: (memorialId: string, photoId: string) =>
     request<void>(`/api/v1/memorials/${memorialId}/photos/${photoId}`, { method: 'DELETE' }),
+
+  getLocations: (memorialId: string) =>
+    request<MemorialLocation[]>(`/api/v1/memorials/${memorialId}/locations`),
+
+  createLocation: (memorialId: string, data: CreateMemorialLocationInput) =>
+    request<MemorialLocation>(`/api/v1/memorials/${memorialId}/locations`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateLocation: (memorialId: string, locationId: string, data: UpdateMemorialLocationInput) =>
+    request<MemorialLocation>(`/api/v1/memorials/${memorialId}/locations/${locationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteLocation: (memorialId: string, locationId: string) =>
+    request<null>(`/api/v1/memorials/${memorialId}/locations/${locationId}`, { method: 'DELETE' }),
 };
 
 interface MemorialDetail extends Memorial {
   obituary?: string;
   photos: Photo[];
   tributes: Tribute[];
+  locations: MemorialLocation[];
 }
 
 interface MemorialPhoto {
@@ -139,4 +161,15 @@ export function photoUrl(path: string): string {
   return `${API_URL}${path}`;
 }
 
-export type { Memorial, MemorialDetail, ProgrammeItem, MemorialPhoto, MemorialSettings, Photo, Tribute };
+export type {
+  Memorial,
+  MemorialDetail,
+  ProgrammeItem,
+  MemorialPhoto,
+  MemorialSettings,
+  Photo,
+  Tribute,
+  MemorialLocation,
+  CreateMemorialLocationInput,
+  UpdateMemorialLocationInput,
+};

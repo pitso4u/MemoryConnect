@@ -8,13 +8,14 @@ import { ProgrammeEditor } from '../components/memorial/ProgrammeEditor';
 import { PhotoManager } from '../components/memorial/PhotoManager';
 import { ObituaryEditor } from '../components/memorial/ObituaryEditor';
 import { TributeViewer } from '../components/memorial/TributeViewer';
-import { FileText, Image, MessageSquare } from 'lucide-react';
+import { LocationManager } from '../components/memorial/LocationManager';
+import { FileText, Image, MapPinned, MessageSquare } from 'lucide-react';
 
 export default function MemorialDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [memorial, setMemorial] = useState<MemorialDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'programme' | 'obituary' | 'photos' | 'tributes'>('programme');
+  const [activeTab, setActiveTab] = useState<'programme' | 'obituary' | 'photos' | 'locations' | 'tributes'>('programme');
   const [saving, setSaving] = useState(false);
   const [obituaryText, setObituaryText] = useState('');
   const [obituaryStatus, setObituaryStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -158,11 +159,12 @@ export default function MemorialDetailPage() {
       />
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-parchment-dark">
+      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-parchment-dark">
         {([
           { key: 'programme', label: 'Programme', icon: FileText },
           { key: 'obituary', label: 'Obituary', icon: FileText },
           { key: 'photos', label: 'Photos', icon: Image },
+          { key: 'locations', label: 'Locations & Directions', icon: MapPinned },
           { key: 'tributes', label: 'Tributes', icon: MessageSquare },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button
@@ -211,6 +213,14 @@ export default function MemorialDetailPage() {
           onCaptionChange={setPhotoCaption}
           onUpload={handlePhotoUpload}
           onDelete={handlePhotoDelete}
+        />
+      )}
+
+      {activeTab === 'locations' && (
+        <LocationManager
+          memorialId={memorial.id}
+          locations={memorial.locations || []}
+          onChange={(locations) => setMemorial({ ...memorial, locations })}
         />
       )}
 

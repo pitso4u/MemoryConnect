@@ -2,17 +2,30 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, PublicMemorial, photoUrl } from '../lib/api';
 import {
-  BookOpen, Calendar, MapPin, Image, MessageSquare, Heart,
+  BookOpen, Calendar, MapPin, Image, MessageSquare, Heart, Navigation,
 } from 'lucide-react';
 
 const sections = [
   { key: 'programme', label: 'Programme', icon: BookOpen },
   { key: 'obituary', label: 'Obituary', icon: BookOpen },
   { key: 'gallery', label: 'Gallery', icon: Image },
+  { key: 'directions', label: 'Directions', icon: MapPin },
   { key: 'tributes', label: 'Tributes', icon: MessageSquare },
 ] as const;
 
 type Section = typeof sections[number]['key'];
+
+const locationTypeLabels = {
+  HOME: 'Family Home',
+  CHURCH: 'Church',
+  CEMETERY: 'Cemetery',
+  RECEPTION: 'Reception / After-tears',
+  OTHER: 'Other location',
+} as const;
+
+export function getDirectionsUrl(latitude: number, longitude: number): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+}
 
 export default function MemorialPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -211,6 +224,60 @@ export default function MemorialPage() {
           </div>
         )}
 
+        {activeSection === 'directions' && (
+          <div className="space-y-3">
+            {memorial.locations?.length > 0 ? (
+              memorial.locations.map((location, index) => (
+                <article key={location.id} className="overflow-hidden rounded-xl border border-white/5 bg-white/5">
+                  <div className="p-5">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold-light">
+                        <MapPin size={20} aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-gold">
+                            {locationTypeLabels[location.type]}
+                          </p>
+                          <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-parchment/40">Stop {index + 1}</span>
+                        </div>
+                        <h2 className="mt-1 font-display text-2xl text-parchment">{location.name}</h2>
+                        {location.addressText && <p className="mt-1 text-sm text-parchment/55">{location.addressText}</p>}
+                        {location.notes && (
+                          <p className="mt-3 rounded-lg border border-gold/15 bg-gold/5 px-3 py-2.5 text-sm leading-6 text-parchment/70">
+                            {location.notes}
+                          </p>
+                        )}
+                        <p className="mt-3 flex items-center gap-1.5 text-xs text-parchment/35">
+                          <Navigation size={12} aria-hidden="true" /> Exact GPS pin saved
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="border-t border-white/5 p-3">
+                    <a
+                      href={getDirectionsUrl(location.latitude, location.longitude)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-gold px-4 py-3 text-sm font-medium text-ink transition hover:bg-gold-light"
+                    >
+                      <Navigation size={16} aria-hidden="true" />
+                      Open Directions
+                    </a>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-xl border border-white/5 bg-white/5 px-6 py-10 text-center">
+                <MapPin size={28} className="mx-auto mb-3 text-gold/35" aria-hidden="true" />
+                <p className="font-display text-xl text-parchment">Exact directions are coming soon</p>
+                {memorial.serviceVenue && <p className="mt-2 text-sm text-parchment/55">Venue: {memorial.serviceVenue}</p>}
+                <p className="mt-2 text-xs leading-5 text-parchment/35">The funeral home has not saved a verified GPS pin yet.</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeSection === 'tributes' && (
           <TributeSection slug={memorial.slug} tributes={memorial.tributes} />
         )}
@@ -219,7 +286,7 @@ export default function MemorialPage() {
       {/* Footer */}
       <footer className="mt-12 px-4 text-center text-xs text-parchment/30 pb-8">
         <p>Arranged by {memorial.funeralHome.name}</p>
-        <p className="mt-1">Powered by MemorialConnect</p>
+        <p className="mt-1">Powered by Memory Connect</p>
       </footer>
     </div>
   );

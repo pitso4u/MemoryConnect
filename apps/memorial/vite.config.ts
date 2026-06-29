@@ -13,8 +13,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico'],
       manifest: {
-        name: 'MemorialConnect',
-        short_name: 'Memorial',
+        name: 'Memory Connect',
+        short_name: 'Memory Connect',
         description: 'Digital Funeral Programme & Memorial Experience',
         theme_color: '#1a1a2e',
         background_color: '#1a1a2e',

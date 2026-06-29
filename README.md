@@ -1,4 +1,4 @@
-# MemorialConnect
+# Memory Connect
 
 Digital Funeral Program & Memorial Experience Platform.
 
@@ -98,15 +98,15 @@ npm run dev
 Terminal output will show network URLs, for example:
 
 ```
-🚀 MemorialConnect API v1
+🚀 Memory Connect API v1
    Environment: development
    Host: 0.0.0.0
    Port: 4000
-MemorialConnect API (Backend)
+Memory Connect API (Backend)
   ➜  Local:   http://localhost:4000
   ➜  Network: http://192.168.0.105:4000
 
-MemorialConnect Admin Portal
+Memory Connect Admin Portal
   ➜  Local:   http://localhost:5173/
   ➜  Network: http://192.168.0.105:5173/
 ```

@@ -92,24 +92,34 @@ router.post('/', authenticate, async (req, res) => {
 });
 
 router.get('/:id', authenticate, async (req, res) => {
-  const id = paramId(req);
-  const memorial = await prisma.memorial.findFirst({
-    where: { id, funeralHomeId: req.user!.funeralHomeId },
-    include: { photos: { orderBy: { order: 'asc' } }, tributes: { orderBy: { createdAt: 'desc' } } },
-  });
+  try {
+    const id = paramId(req);
+    const memorial = await prisma.memorial.findFirst({
+      where: { id, funeralHomeId: req.user!.funeralHomeId },
+      include: {
+        photos: { orderBy: { order: 'asc' } },
+        tributes: { orderBy: { createdAt: 'desc' } },
+        locations: { orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
 
-  if (!memorial) {
-    return res.status(404).json({ success: false, error: 'Memorial not found' });
+    if (!memorial) {
+      return res.status(404).json({ success: false, error: 'Memorial not found' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...formatMemorial(memorial as unknown as Record<string, unknown>),
+        photos: memorial.photos,
+        tributes: memorial.tributes,
+        locations: memorial.locations,
+      },
+    });
+  } catch (error) {
+    console.error('Get memorial error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load memorial' });
   }
-
-  res.json({
-    success: true,
-    data: {
-      ...formatMemorial(memorial as unknown as Record<string, unknown>),
-      photos: memorial.photos,
-      tributes: memorial.tributes,
-    },
-  });
 });
 
 router.patch('/:id', authenticate, async (req, res) => {

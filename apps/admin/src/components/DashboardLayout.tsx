@@ -15,7 +15,7 @@ export default function DashboardLayout() {
     <div className="min-h-screen flex">
       <aside className="w-64 bg-ink text-parchment flex flex-col">
         <div className="p-6 border-b border-white/10">
-          <h1 className="font-display text-xl">MemorialConnect</h1>
+          <h1 className="font-display text-xl">Memory Connect</h1>
           <p className="text-xs text-parchment/50 mt-1">Admin Portal</p>
         </div>
 
