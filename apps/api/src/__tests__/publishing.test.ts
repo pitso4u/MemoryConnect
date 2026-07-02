@@ -62,6 +62,9 @@ describe('pay-per-funeral lifecycle', () => {
   it('allows a signed private preview without publishing or counting a public view', async () => {
     const { funeralHome, token } = await home('private-preview');
     const memorial = await draft(funeralHome.id, 'Preview Test');
+    await prisma.photo.create({
+      data: { memorialId: memorial.id, url: '/uploads/slideshow-photo.jpg', caption: 'Family memory', category: 'family' },
+    });
     const publicAttempt = await request(app).get(`/api/v1/public/memorials/${memorial.slug}`);
     expect(publicAttempt.status).toBe(410);
 
@@ -81,6 +84,9 @@ describe('pay-per-funeral lifecycle', () => {
       .get(`/api/v1/public/memorials/${memorial.slug}/projector`)
       .query({ preview: previewToken.body.data.token });
     expect(projector.status).toBe(200);
+    expect(projector.body.data.photos).toEqual([
+      expect.objectContaining({ url: '/uploads/slideshow-photo.jpg', caption: 'Family memory' }),
+    ]);
     await prisma.funeralHome.delete({ where: { id: funeralHome.id } });
   });
 

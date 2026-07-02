@@ -150,10 +150,19 @@ router.get('/memorials/:slug/projector', async (req, res) => {
         currentItem: DEMO_PROGRAMME[DEMO_MEMORIAL.currentProgrammeIndex],
         nextItem: DEMO_PROGRAMME[DEMO_MEMORIAL.currentProgrammeIndex + 1],
         announcements: DEMO_MEMORIAL.announcements,
+        photos: DEMO_MEMORIAL.photos,
       },
     });
   }
-  const memorial = await prisma.memorial.findFirst({ where: { slug, deletedAt: null } });
+  const memorial = await prisma.memorial.findFirst({
+    where: { slug, deletedAt: null },
+    include: {
+      photos: {
+        where: { deletedAt: null, mediaType: 'PHOTO' },
+        orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      },
+    },
+  });
   if (!memorial) return res.status(404).json({ success: false, message: 'Memorial not found' });
   const preview = verifyPreviewToken(queryValue(req.query.preview));
   const isPreview = Boolean(preview && preview.memorialId === memorial.id && preview.funeralHomeId === memorial.funeralHomeId);
@@ -168,6 +177,7 @@ router.get('/memorials/:slug/projector', async (req, res) => {
       currentItem: programme[memorial.currentProgrammeIndex] || null,
       nextItem: programme[memorial.currentProgrammeIndex + 1] || null,
       announcements: (memorial.announcements as unknown[]).filter((item) => (item as Record<string, unknown>).active),
+      photos: memorial.photos,
     },
   });
 });

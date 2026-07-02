@@ -73,6 +73,7 @@ export interface ProjectorData {
   currentItem: ProgrammeItem | null;
   nextItem: ProgrammeItem | null;
   announcements: Announcement[];
+  photos: Photo[];
 }
 
 export type { ProgrammeItem, Photo, Tribute, Announcement, MemorialLocation };
