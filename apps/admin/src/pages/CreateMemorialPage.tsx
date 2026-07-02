@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
 export default function CreateMemorialPage() {
@@ -27,20 +27,17 @@ export default function CreateMemorialPage() {
   };
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="max-w-2xl p-4 sm:p-6 lg:p-8">
       <h1 className="font-display text-3xl text-ink mb-1">Create Memorial</h1>
       <p className="text-muted mb-8">Step 1 — Basic information about the deceased</p>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
           {error}{' '}
-          {(error.includes('Starter') || error.includes('demo')) && (
-            <Link to="/billing" className="font-semibold underline underline-offset-2">View plan</Link>
-          )}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5 bg-white rounded-xl border border-parchment-dark p-6">
+      <form onSubmit={handleSubmit} className="space-y-5 rounded-xl border border-parchment-dark bg-white p-4 sm:p-6">
         <div>
           <label className="block text-sm font-medium text-ink mb-1.5">
             Full Name of Deceased *

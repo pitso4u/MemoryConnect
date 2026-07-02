@@ -8,9 +8,8 @@ import type {
   MemorialLocation,
   CreateMemorialLocationInput,
   UpdateMemorialLocationInput,
-  BillingStatus,
-  PaymentKind,
-  PlanCode,
+  MemorialAnalytics,
+  PublishPayment,
 } from '@memorialconnect/shared';
 
 const API_URL = getApiUrl();
@@ -72,6 +71,11 @@ export const api = {
       { method: 'POST', body: JSON.stringify(data) }
     ),
 
+  getFuneralHomeProfile: () => request<FuneralHomeProfile>('/api/v1/auth/funeral-home-profile'),
+
+  updateFuneralHomeProfile: (data: Partial<FuneralHomeProfile>) =>
+    request<FuneralHomeProfile>('/api/v1/auth/funeral-home-profile', { method: 'PATCH', body: JSON.stringify(data) }),
+
   getMemorials: () => request<Memorial[]>('/api/v1/memorials'),
 
   createMemorial: (data: { deceasedName: string; serviceDate?: string; serviceVenue?: string }) =>
@@ -79,8 +83,23 @@ export const api = {
 
   getMemorial: (id: string) => request<MemorialDetail>(`/api/v1/memorials/${id}`),
 
+  getMemorialPreviewToken: (id: string) =>
+    request<{ token: string; expiresInSeconds: number }>(`/api/v1/memorials/${id}/preview-token`),
+
   updateMemorial: (id: string, data: Partial<Memorial>) =>
     request<Memorial>(`/api/v1/memorials/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  initializePublishPayment: (id: string) =>
+    request<{ authorizationUrl: string; accessCode: string; reference: string }>(`/api/v1/memorials/${id}/initialize-publish-payment`, { method: 'POST' }),
+
+  verifyPublishPayment: (id: string, reference: string) =>
+    request<Memorial>(`/api/v1/memorials/${id}/verify-publish-payment/${encodeURIComponent(reference)}`),
+
+  deleteMemorial: (id: string) =>
+    request<{ filesDeleted: number; bytesDeleted: number }>(`/api/v1/memorials/${id}`, { method: 'DELETE' }),
+
+  getMemorialAnalytics: (id: string) =>
+    request<MemorialAnalytics>(`/api/v1/memorials/${id}/analytics`),
 
   programmeNext: (id: string) =>
     request<MemorialDetail>(`/api/v1/memorials/${id}/programme/next`, { method: 'POST' }),
@@ -143,16 +162,7 @@ export const api = {
   deleteLocation: (memorialId: string, locationId: string) =>
     request<null>(`/api/v1/memorials/${memorialId}/locations/${locationId}`, { method: 'DELETE' }),
 
-  getBillingStatus: () => request<BillingStatus>('/api/v1/billing/status'),
-
-  initializePayment: (kind: PaymentKind, planCode?: PlanCode) =>
-    request<{ authorization_url: string; access_code: string; reference: string }>('/api/v1/billing/initialize', {
-      method: 'POST',
-      body: JSON.stringify({ kind, planCode }),
-    }),
-
-  verifyPayment: (reference: string) =>
-    request<BillingStatus>(`/api/v1/billing/verify/${encodeURIComponent(reference)}`),
+  getPayments: () => request<Array<PublishPayment & { memorial: { deceasedName: string } }>>('/api/v1/payments'),
 };
 
 interface MemorialDetail extends Memorial {
@@ -168,6 +178,24 @@ interface MemorialPhoto {
   caption?: string;
   category: string;
   order: number;
+}
+
+export interface FuneralHomeProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  address?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  websiteUrl?: string | null;
+  facebookUrl?: string | null;
+  analyticsAccessEnabled: boolean;
+  apiAccessEnabled: boolean;
+  dedicatedSupportEnabled: boolean;
+  branches: Array<{ id: string; name: string; address?: string | null }>;
+  users: Array<{ id: string; name: string; email: string; role: string }>;
 }
 
 export function photoUrl(path: string): string {
@@ -186,7 +214,6 @@ export type {
   MemorialLocation,
   CreateMemorialLocationInput,
   UpdateMemorialLocationInput,
-  BillingStatus,
-  PaymentKind,
-  PlanCode,
+  MemorialAnalytics,
+  PublishPayment,
 };

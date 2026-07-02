@@ -1,4 +1,25 @@
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
+
+// npm workspaces run the API from apps/api, while developers often keep the
+// shared environment file at the repository root. Load non-empty values from
+// both locations without overriding variables supplied by the host process.
+const envCandidates = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(__dirname, '../../.env'),
+  path.resolve(process.cwd(), '../../.env'),
+  path.resolve(__dirname, '../../../../.env'),
+];
+
+for (const envPath of [...new Set(envCandidates)]) {
+  if (!fs.existsSync(envPath)) continue;
+  const parsed = dotenv.parse(fs.readFileSync(envPath));
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!process.env[key] && value) process.env[key] = value;
+  }
+}
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -11,9 +32,7 @@ const envSchema = z.object({
   ADMIN_URL: z.string().optional(),
   MEMORIAL_URL: z.string().optional(),
   PAYSTACK_SECRET_KEY: z.string().optional(),
-  PAYSTACK_STARTER_PLAN_CODE: z.string().optional(),
-  PAYSTACK_PROFESSIONAL_PLAN_CODE: z.string().optional(),
-  PAYSTACK_UNLIMITED_PLAN_CODE: z.string().optional(),
+  MEMORIAL_EDIT_LOCK_HOURS: z.string().transform(Number).pipe(z.number().int().positive()).default('72'),
 });
 
 export function validateEnv() {

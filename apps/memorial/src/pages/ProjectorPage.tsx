@@ -6,17 +6,18 @@ export default function ProjectorPage() {
   const { slug } = useParams<{ slug: string }>();
   const [data, setData] = useState<ProjectorData | null>(null);
   const [error, setError] = useState('');
+  const previewToken = new URLSearchParams(window.location.search).get('preview') || undefined;
 
   useEffect(() => {
     if (!slug) return;
     const fetch = () =>
-      api.getProjector(slug)
+      api.getProjector(slug, previewToken)
         .then(setData)
         .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load projector data'));
     fetch();
     const interval = setInterval(fetch, 3000);
     return () => clearInterval(interval);
-  }, [slug]);
+  }, [slug, previewToken]);
 
   if (!data && !error) {
     return (

@@ -14,8 +14,6 @@ export interface PaystackTransactionData {
     customer_code?: string;
   };
   metadata?: Record<string, unknown> | string | null;
-  plan?: string | { plan_code?: string } | null;
-  subscription_code?: string | null;
 }
 
 interface PaystackResponse<T> {
@@ -53,7 +51,6 @@ export function initializePaystackTransaction(input: {
   reference: string;
   callbackUrl: string;
   metadata: Record<string, unknown>;
-  planCode?: string;
 }) {
   return paystackRequest<{ authorization_url: string; access_code: string; reference: string }>(
     '/transaction/initialize',
@@ -66,7 +63,7 @@ export function initializePaystackTransaction(input: {
         reference: input.reference,
         callback_url: input.callbackUrl,
         metadata: input.metadata,
-        ...(input.planCode ? { plan: input.planCode, channels: ['card'] } : {}),
+        channels: ['card'],
       }),
     },
   );

@@ -199,36 +199,32 @@ DATABASE_URL=postgresql://user:password@host:5432/memorialconnect
 - QR code generation with local-network demo support
 - Offline PWA support
 
-## Paystack Billing
+## Pay-per-funeral publishing
 
-Memory Connect v1.2.0 supports three funeral-home subscription tiers:
+Memory Connect charges **R299.99 per published funeral**. Drafts are free, and each successful payment provides 30 days of public viewing.
 
-| Plan | Price | Included funerals/memorials | Extra funeral |
-|------|-------|--------------------|----------------|
-| Starter | **R499.99/month** | 5/month | R149.99 each |
-| Professional | **R999.99/month** | 15/month | R149.99 each |
-| Unlimited | **R1,999.99/month** | Unlimited | Not needed |
-
-A funeral means one published memorial/event page. Draft memorials do not count against the monthly limit. Usage resets every billing cycle.
-
-1. In the Paystack dashboard, create monthly ZAR plans for R499.99, R999.99, and R1,999.99.
-2. Add these values to `.env.production` on the VM:
+1. Add these values to `.env.production` on the VM:
 
    ```env
    PAYSTACK_SECRET_KEY=sk_live_your_key
-   PAYSTACK_STARTER_PLAN_CODE=PLN_starter_plan_code
-   PAYSTACK_PROFESSIONAL_PLAN_CODE=PLN_professional_plan_code
-   PAYSTACK_UNLIMITED_PLAN_CODE=PLN_unlimited_plan_code
+   MEMORIAL_EDIT_LOCK_HOURS=72
    ADMIN_URL=https://admin.memoryconnect.co.za
    ```
 
 3. Configure the Paystack webhook URL:
 
    ```text
-   https://api.memoryconnect.co.za/api/v1/billing/webhook
+   https://api.memoryconnect.co.za/api/v1/payments/webhook
    ```
 
-Use Paystack test keys and a test plan before switching to live keys. The API verifies every checkout server-side and validates webhook signatures before changing subscription access.
+Use Paystack test keys before switching to live keys. The API verifies the reference, amount, currency, and success state server-side, and validates webhook signatures before publishing.
+
+- `POST /api/v1/memorials/:id/initialize-publish-payment` starts the R299.99 checkout.
+- `GET /api/v1/memorials/:id/verify-publish-payment/:reference` verifies and publishes.
+- `POST /api/v1/payments/webhook` handles signed Paystack events.
+- `scripts/expire-public-memorials.ts` ends viewing after 30 days.
+- `scripts/delete-expired-videos.ts` removes videos after 30 days.
+- `scripts/delete-expired-memorials.ts` removes the full memorial and media after 90 days.
 
 ## License
 
