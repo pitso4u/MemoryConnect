@@ -5,6 +5,25 @@ type SqliteColumn = {
 };
 
 async function prepareDatabase() {
+  const paymentColumns = await prisma.$queryRawUnsafe<SqliteColumn[]>(
+    'PRAGMA table_info("Payment")',
+  );
+  const paymentNames = new Set(paymentColumns.map((column) => column.name));
+
+  // Builds using the per-funeral schema originally called this table Payment.
+  // Move it to its permanent name before restoring the legacy Payment mapping.
+  if (paymentNames.has('memorialId')) {
+    const memorialPaymentColumns = await prisma.$queryRawUnsafe<SqliteColumn[]>(
+      'PRAGMA table_info("MemorialPayment")',
+    );
+    if (memorialPaymentColumns.length === 0) {
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE "Payment" RENAME TO "MemorialPayment"',
+      );
+      console.log('Moved per-funeral payments to the MemorialPayment table.');
+    }
+  }
+
   const memorialColumns = await prisma.$queryRawUnsafe<SqliteColumn[]>(
     'PRAGMA table_info("Memorial")',
   );

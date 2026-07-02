@@ -28,6 +28,9 @@ model FuneralHome {
   branches                 Branch[]
   memorials                Memorial[]
   payments                 Payment[]
+  legacyPayments           LegacyPayment[]
+  subscriptions            Subscription[]
+  usageLedger              UsageLedger[]
 }
 
 model Branch {
@@ -72,6 +75,7 @@ model Memorial {
   announcements         Json
   settings              Json
   status                String             @default("DRAFT")
+  isDemo                Boolean            @default(false)
   paymentStatus         String             @default("UNPAID")
   paymentId             String?            @unique
   payment               Payment?           @relation("CurrentMemorialPayment", fields: [paymentId], references: [id], onDelete: SetNull)
@@ -90,6 +94,7 @@ model Memorial {
   photos                Photo[]
   tributes              Tribute[]
   views                  MemorialView[]
+  usageLedger            UsageLedger[]
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
@@ -118,6 +123,83 @@ model Payment {
 
   @@index([funeralHomeId, status, createdAt])
   @@index([memorialId, createdAt])
+  @@map("MemorialPayment")
+}
+
+// Retained for non-destructive migration from the previous subscription
+// billing model. New funeral publication charges use `Payment` above.
+model Plan {
+  id                  String          @id @default(cuid())
+  code                String
+  name                String
+  amount              Int
+  currency            String          @default("ZAR")
+  interval            String          @default("monthly")
+  memorialLimit       Int
+  extraMemorialAmount Int
+  fairUseUnlimited    Boolean         @default(false)
+  active              Boolean         @default(true)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  subscriptions       Subscription[]
+  payments            LegacyPayment[]
+}
+
+model Subscription {
+  id                        String          @id @default(cuid())
+  funeralHomeId             String
+  funeralHome               FuneralHome     @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  planId                    String
+  plan                      Plan            @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status                    String          @default("pending")
+  paystackCustomerCode      String?
+  paystackSubscriptionCode  String?
+  paystackEmailToken        String?
+  currentPeriodStart        DateTime?
+  currentPeriodEnd          DateTime?
+  cancelAtPeriodEnd         Boolean         @default(false)
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  payments                  LegacyPayment[]
+  usageLedger               UsageLedger[]
+}
+
+model LegacyPayment {
+  id                    String        @id @default(cuid())
+  funeralHomeId         String
+  funeralHome           FuneralHome   @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  subscriptionId        String?
+  subscription          Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  planId                String?
+  plan                  Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
+  kind                  String
+  status                String        @default("pending")
+  amount                Int
+  currency              String        @default("ZAR")
+  paystackReference     String
+  paystackTransactionId String?
+  paidAt                DateTime?
+  failureMessage        String?
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@map("Payment")
+}
+
+model UsageLedger {
+  id             String        @id @default(cuid())
+  funeralHomeId  String
+  funeralHome    FuneralHome   @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  memorialId     String
+  memorial       Memorial      @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  type           String        @default("memorial_published")
+  quantity       Int           @default(1)
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime      @default(now())
 }
 
 model MemorialView {
