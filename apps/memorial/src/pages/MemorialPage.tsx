@@ -33,19 +33,16 @@ export default function MemorialPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeSection, setActiveSection] = useState<Section>('programme');
+  const previewToken = new URLSearchParams(window.location.search).get('preview') || undefined;
 
   useEffect(() => {
     if (!slug) return;
-    api.getMemorial(slug)
+    api.getMemorial(slug, previewToken)
       .then(setMemorial)
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load memorial'))
       .finally(() => setLoading(false));
 
-    const interval = setInterval(() => {
-      api.getMemorial(slug).then(setMemorial).catch(() => {});
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [slug]);
+  }, [slug, previewToken]);
 
   if (loading) {
     return (
@@ -63,7 +60,7 @@ export default function MemorialPage() {
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="text-center">
           <Heart size={32} className="mx-auto mb-4 text-gold/40" />
-          <p className="font-display text-xl mb-2">Memorial not found</p>
+          <p className="font-display text-xl mb-2">{error === 'This memorial viewing period has ended.' ? 'Viewing period ended' : 'Memorial not found'}</p>
           <p className="text-parchment/50 text-sm">{error || 'This memorial may not be published yet.'}</p>
         </div>
       </div>
@@ -73,9 +70,20 @@ export default function MemorialPage() {
   const currentItem = memorial.programme[memorial.currentProgrammeIndex];
   const nextItem = memorial.programme[memorial.currentProgrammeIndex + 1];
   const activeAnnouncements = memorial.announcements.filter((a) => a.active);
+  const visibleSections = memorial.settings.showTributeWall === false
+    ? sections.filter((section) => section.key !== 'tributes')
+    : sections;
 
   return (
-    <div className="min-h-screen pb-20">
+    <div
+      className="min-h-screen pb-20"
+      style={{ '--funeral-home-primary': memorial.funeralHome.primaryColor || '#c9a84c' } as React.CSSProperties}
+    >
+      {memorial.isPreview && (
+        <div className="sticky top-0 z-50 bg-gold px-4 py-2 text-center text-xs font-semibold uppercase tracking-[0.16em] text-ink shadow-lg">
+          Private preview · This memorial is not public
+        </div>
+      )}
       {/* Hero */}
       <header className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-ink-light to-ink" />
@@ -85,6 +93,15 @@ export default function MemorialPage() {
         />
         <div className="relative px-6 pt-16 pb-10 text-center animate-fade-up">
           <p className="text-xs uppercase tracking-[0.3em] text-gold mb-4">In Loving Memory</p>
+          <div className="mx-auto mb-7 h-44 w-44 overflow-hidden rounded-full border-2 border-gold/40 bg-white/5 shadow-2xl shadow-black/30 sm:h-52 sm:w-52">
+            {memorial.deceasedPhotoUrl ? (
+              <img src={photoUrl(memorial.deceasedPhotoUrl)} alt={`Portrait of ${memorial.deceasedName}`} className="h-full w-full object-cover" />
+            ) : (
+              <div className="grid h-full w-full place-items-center bg-gradient-to-br from-white/10 to-transparent" aria-label="Portrait placeholder">
+                <Heart size={52} strokeWidth={1} className="text-gold/45" />
+              </div>
+            )}
+          </div>
           <h1 className="font-display text-4xl md:text-5xl text-parchment mb-3">
             {memorial.deceasedName}
           </h1>
@@ -150,7 +167,7 @@ export default function MemorialPage() {
 
       {/* Section Navigation */}
       <nav className="flex gap-1 px-4 mb-6 overflow-x-auto animate-fade-up animate-fade-up-delay-2">
-        {sections.map(({ key, label, icon: Icon }) => (
+        {visibleSections.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => setActiveSection(key)}
@@ -278,14 +295,22 @@ export default function MemorialPage() {
           </div>
         )}
 
-        {activeSection === 'tributes' && (
+        {activeSection === 'tributes' && memorial.settings.showTributeWall !== false && (
           <TributeSection slug={memorial.slug} tributes={memorial.tributes} />
         )}
       </div>
 
       {/* Footer */}
       <footer className="mt-12 px-4 text-center text-xs text-parchment/30 pb-8">
-        <p>Arranged by {memorial.funeralHome.name}</p>
+        {memorial.funeralHome.logoUrl && <img src={photoUrl(memorial.funeralHome.logoUrl)} alt={`${memorial.funeralHome.name} logo`} className="mx-auto mb-4 max-h-14 max-w-40 object-contain" />}
+        <p className="text-sm text-parchment/65">Arranged by {memorial.funeralHome.name}</p>
+        <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1">
+          {memorial.funeralHome.phone && <a href={`tel:${memorial.funeralHome.phone}`} className="hover:text-gold-light">{memorial.funeralHome.phone}</a>}
+          {memorial.funeralHome.email && <a href={`mailto:${memorial.funeralHome.email}`} className="hover:text-gold-light">{memorial.funeralHome.email}</a>}
+          {memorial.funeralHome.websiteUrl && <a href={memorial.funeralHome.websiteUrl} target="_blank" rel="noreferrer" className="hover:text-gold-light">Website</a>}
+          {memorial.funeralHome.facebookUrl && <a href={memorial.funeralHome.facebookUrl} target="_blank" rel="noreferrer" className="hover:text-gold-light">Facebook</a>}
+        </div>
+        {memorial.funeralHome.address && <p className="mt-2">{memorial.funeralHome.address}</p>}
         <p className="mt-1">Powered by Memory Connect</p>
       </footer>
     </div>

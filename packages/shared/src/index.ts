@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Status of a memorial in the system
  */
-export type MemorialStatus = 'draft' | 'published' | 'archived';
+export type MemorialStatus = 'DRAFT' | 'PAID_PENDING' | 'PUBLISHED' | 'LOCKED' | 'EXPIRED' | 'DELETED';
 
 /**
  * Type of programme item in a funeral service
@@ -42,8 +42,17 @@ export interface MemorialSummary {
   dateOfDeath?: string;
   serviceDate?: string;
   serviceVenue?: string;
-  coverPhotoUrl?: string;
+  deceasedPhotoUrl?: string;
   status: MemorialStatus;
+  paymentStatus: 'UNPAID' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'ABANDONED';
+  paymentId?: string;
+  publishedAt?: string;
+  editLocksAt?: string;
+  publicExpiresAt?: string;
+  deleteAfter?: string;
+  deletedAt?: string;
+  viewCount: number;
+  storageBytes?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,6 +68,26 @@ export interface Memorial extends MemorialSummary {
   announcements: Announcement[];
   settings: MemorialSettings;
   locations?: MemorialLocation[];
+}
+
+export interface PublishPayment {
+  id: string;
+  memorialId: string;
+  amountCents: 29999;
+  currency: 'ZAR';
+  purpose: 'FUNERAL_PUBLISH';
+  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'ABANDONED';
+  paystackReference: string;
+  paidAt?: string | null;
+  createdAt: string;
+}
+
+export interface MemorialAnalytics {
+  totalViews: number;
+  viewsToday: number;
+  viewsLast7Days: number;
+  viewsByMemorial: Array<{ id: string; deceasedName: string; viewCount: number }>;
+  topViewedMemorials: Array<{ id: string; deceasedName: string; viewCount: number }>;
 }
 
 export type MemorialLocationType = 'HOME' | 'CHURCH' | 'CEMETERY' | 'RECEPTION' | 'OTHER';
@@ -146,6 +175,8 @@ export interface Photo {
   caption?: string;
   category: 'childhood' | 'school' | 'wedding' | 'family' | 'friends' | 'recent' | 'other' | string;
   order: number;
+  storageBytes?: number;
+  deletedAt?: string | null;
 }
 
 /**
@@ -155,7 +186,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'staff';
+  role: 'admin' | 'staff' | 'SUPER_ADMIN';
   funeralHomeId: string;
 }
 
@@ -169,7 +200,13 @@ export interface FuneralHome {
   phone?: string;
   address?: string;
   logoUrl?: string;
-  plan: 'single' | 'professional' | 'enterprise';
+  primaryColor?: string;
+  secondaryColor?: string;
+  websiteUrl?: string;
+  facebookUrl?: string;
+  analyticsAccessEnabled: boolean;
+  apiAccessEnabled: boolean;
+  dedicatedSupportEnabled: boolean;
 }
 
 /**
@@ -237,14 +274,13 @@ export const updateMemorialSchema = z.object({
   dateOfDeath: z.string().optional(),
   serviceDate: z.string().optional(),
   serviceVenue: z.string().optional(),
-  coverPhotoUrl: z.string().url().optional().or(z.literal('')),
+  deceasedPhotoUrl: z.string().url().optional().or(z.literal('')),
   obituary: z.string().optional(),
   biography: z.any().optional(),
   programme: z.array(z.any()).optional(),
   currentProgrammeIndex: z.number().int().min(0).optional(),
   announcements: z.array(z.any()).optional(),
   settings: z.any().optional(),
-  status: z.enum(['draft', 'published', 'archived']).optional(),
 });
 
 export const memorialLocationTypeSchema = z.enum([

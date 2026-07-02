@@ -8,17 +8,39 @@ datasource db {
 }
 
 model FuneralHome {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  phone     String?
-  address   String?
-  logoUrl   String?
-  plan      String   @default("professional")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  users     User[]
-  memorials Memorial[]
+  id                       String         @id @default(cuid())
+  name                     String
+  email                    String         @unique
+  phone                    String?
+  address                  String?
+  logoUrl                  String?
+  primaryColor             String?
+  secondaryColor           String?
+  websiteUrl               String?
+  facebookUrl              String?
+  analyticsAccessEnabled   Boolean        @default(true)
+  apiAccessEnabled         Boolean        @default(false)
+  dedicatedSupportEnabled  Boolean        @default(false)
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  users                    User[]
+  branches                 Branch[]
+  memorials                Memorial[]
+  payments                 Payment[]
+}
+
+model Branch {
+  id            String      @id @default(cuid())
+  funeralHomeId String
+  funeralHome   FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  name          String
+  phone         String?
+  email         String?
+  address       String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([funeralHomeId])
 }
 
 model User {
@@ -28,34 +50,88 @@ model User {
   name          String
   role          String      @default("staff")
   funeralHomeId String
-  funeralHome   FuneralHome @relation(fields: [funeralHomeId], references: [id])
+  funeralHome   FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 }
 
 model Memorial {
-  id                    String   @id @default(cuid())
-  slug                  String   @unique
+  id                    String             @id @default(cuid())
+  slug                  String             @unique
   deceasedName          String
   dateOfBirth           DateTime?
   dateOfDeath           DateTime?
   serviceDate           DateTime?
   serviceVenue          String?
-  coverPhotoUrl         String?
+  deceasedPhotoUrl      String?
   obituary              String?
   biography             Json?
   programme             Json
-  currentProgrammeIndex Int      @default(0)
+  currentProgrammeIndex Int                @default(0)
   announcements         Json
   settings              Json
-  status                String   @default("draft")
+  status                String             @default("DRAFT")
+  paymentStatus         String             @default("UNPAID")
+  paymentId             String?            @unique
+  payment               Payment?           @relation("CurrentMemorialPayment", fields: [paymentId], references: [id], onDelete: SetNull)
+  payments              Payment[]          @relation("MemorialPayments")
+  publishedAt           DateTime?
+  editLocksAt           DateTime?
+  publicExpiresAt       DateTime?
+  deleteAfter           DateTime?
+  deletedAt             DateTime?
+  videosDeletedAt       DateTime?
+  viewCount             Int                @default(0)
+  storageBytes          Float              @default(0)
   funeralHomeId         String
-  funeralHome           FuneralHome @relation(fields: [funeralHomeId], references: [id])
+  funeralHome           FuneralHome        @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
   locations             MemorialLocation[]
   photos                Photo[]
   tributes              Tribute[]
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  views                  MemorialView[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([status, publicExpiresAt])
+  @@index([deleteAfter, deletedAt])
+  @@index([funeralHomeId, status])
+}
+
+model Payment {
+  id                  String      @id @default(cuid())
+  funeralHomeId       String
+  funeralHome         FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  memorialId          String
+  memorial            Memorial    @relation("MemorialPayments", fields: [memorialId], references: [id], onDelete: Cascade)
+  currentForMemorial  Memorial?   @relation("CurrentMemorialPayment")
+  amountCents         Int         @default(29999)
+  currency            String      @default("ZAR")
+  purpose             String      @default("FUNERAL_PUBLISH")
+  status              String      @default("PENDING")
+  paystackReference   String      @unique
+  paystackAccessCode  String?
+  authorizationUrl    String?
+  paidAt              DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@index([funeralHomeId, status, createdAt])
+  @@index([memorialId, createdAt])
+}
+
+model MemorialView {
+  id         String   @id @default(cuid())
+  memorialId String
+  memorial   Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  viewedAt   DateTime @default(now())
+  ipHash     String?
+  userAgent  String?
+  referrer   String?
+  country    String?
+  deviceType String?
+
+  @@index([memorialId, viewedAt])
+  @@index([viewedAt])
 }
 
 model MemorialLocation {
@@ -76,14 +152,20 @@ model MemorialLocation {
 }
 
 model Photo {
-  id         String   @id @default(cuid())
-  memorialId String
-  memorial   Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
-  url        String
-  caption    String?
-  category   String   @default("other")
-  order      Int      @default(0)
-  createdAt  DateTime @default(now())
+  id           String   @id @default(cuid())
+  memorialId   String
+  memorial     Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  url          String
+  caption      String?
+  category     String   @default("other")
+  mediaType    String   @default("PHOTO")
+  order        Int      @default(0)
+  storageBytes Float    @default(0)
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([memorialId, deletedAt])
+  @@index([memorialId, mediaType, deletedAt])
 }
 
 model Tribute {

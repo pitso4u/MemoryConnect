@@ -8,6 +8,12 @@ export interface AuthPayload {
   role: string;
 }
 
+export interface PreviewPayload {
+  kind: 'memorial_preview';
+  memorialId: string;
+  funeralHomeId: string;
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -33,4 +39,22 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 
 export function signToken(payload: AuthPayload): string {
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as SignOptions);
+}
+
+export function signPreviewToken(memorialId: string, funeralHomeId: string): string {
+  return jwt.sign(
+    { kind: 'memorial_preview', memorialId, funeralHomeId } satisfies PreviewPayload,
+    env.JWT_SECRET,
+    { expiresIn: '15m' },
+  );
+}
+
+export function verifyPreviewToken(token?: string): PreviewPayload | null {
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, env.JWT_SECRET) as PreviewPayload;
+    return payload.kind === 'memorial_preview' ? payload : null;
+  } catch {
+    return null;
+  }
 }

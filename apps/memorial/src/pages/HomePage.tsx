@@ -19,7 +19,7 @@ const steps = [
   ['Share their story', 'Add a biography and a thoughtful collection of photographs.'],
   ['Generate the QR code', 'Place it on printed programmes, venue screens, or funeral notices.'],
   ['Share one simple link', 'Family and guests can open everything instantly on any phone.'],
-  ['Keep the memory online', 'The page remains a place to revisit after the service has ended.'],
+  ['Publish when ready', 'Pay once to make the memorial public for 30 days.'],
 ];
 
 const features = [
@@ -79,17 +79,17 @@ export default function HomePage() {
                 <span className="block pl-[0.42em] text-gold-light">Connect</span>
               </h1>
               <p className="animate-fade-up animate-fade-up-delay-2 mt-10 max-w-2xl font-display text-2xl leading-snug text-parchment/90 sm:text-3xl">
-                Digital memorials, funeral programmes, photos, tributes and directions — all in one link.
+                Memory Connect helps funeral homes create beautiful digital funeral programmes and memorial pages.
               </p>
               <p className="animate-fade-up animate-fade-up-delay-2 mt-5 max-w-xl text-base leading-7 text-parchment/60 sm:text-lg">
-                Create a beautiful online memory page for every service. Families scan a QR code and instantly access the programme, biography, gallery, map and tribute wall.
+                Create the programme, add photos, directions, obituary and QR code. Pay only when you publish.
               </p>
               <div className="animate-fade-up animate-fade-up-delay-3 mt-9 flex flex-col gap-3 sm:flex-row">
                 <a href={registerUrl} className="group inline-flex items-center justify-center gap-2 rounded-full bg-gold px-7 py-3.5 font-semibold text-ink transition hover:bg-gold-light">
-                  For Funeral Homes
+                  Create Funeral Home Account
                   <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
                 </a>
-                <Link to="/msjevkt1" className="inline-flex items-center justify-center gap-2 rounded-full border border-parchment/25 px-7 py-3.5 font-medium text-parchment transition hover:border-parchment/60 hover:bg-white/5">
+                <Link to="/demo" className="inline-flex items-center justify-center gap-2 rounded-full border border-parchment/25 px-7 py-3.5 font-medium text-parchment transition hover:border-parchment/60 hover:bg-white/5">
                   View Demo Memorial
                 </Link>
               </div>
@@ -159,7 +159,7 @@ export default function HomePage() {
               <div className="rounded-3xl bg-parchment p-7 shadow-sm">
                 <CircleDollarSign size={26} strokeWidth={1.5} className="text-gold-dark" />
                 <h3 className="mt-10 font-display text-2xl font-semibold">One clear business account</h3>
-                <p className="mt-3 leading-7 text-ink/55">Include Memory Connect in your funeral package without asking grieving families to arrange a separate payment.</p>
+                <p className="mt-3 leading-7 text-ink/55">Include Memory Connect in your service offering without asking grieving families to arrange a separate payment.</p>
               </div>
               <div className="rounded-3xl bg-ink p-7 text-parchment shadow-xl">
                 <Clock3 size={26} strokeWidth={1.5} className="text-gold-light" />
@@ -178,37 +178,27 @@ export default function HomePage() {
                 <h2 className="mt-5 font-display text-5xl font-semibold leading-none sm:text-7xl">Start small.<br />Serve beautifully.</h2>
               </div>
               <p className="max-w-lg text-lg leading-8 text-ink/55 lg:justify-self-end">
-                A straightforward monthly plan for independent funeral homes. No complicated tiers, no surprise platform fees.
+                Draft for free, then pay once when the funeral is ready to share. Public viewing is included for 30 days.
               </p>
             </div>
 
-            <div className="mt-14 grid overflow-hidden rounded-[2rem] bg-ink text-parchment shadow-2xl shadow-ink/15 lg:grid-cols-[1fr_0.82fr]">
-              <div className="p-8 sm:p-12 lg:p-16">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gold-light">Memory Connect Starter</p>
-                <div className="mt-6 flex items-end gap-3">
-                  <span className="font-display text-7xl font-semibold tracking-tight sm:text-8xl">R499</span>
-                  <span className="pb-3 text-parchment/45">/ month</span>
-                </div>
-                <p className="mt-5 max-w-lg text-lg leading-8 text-parchment/60">Everything your team needs to offer a polished digital memorial with every service.</p>
-                <a href={registerUrl} className="group mt-9 inline-flex items-center gap-2 rounded-full bg-gold px-7 py-3.5 font-semibold text-ink transition hover:bg-gold-light">
-                  Create funeral home account
-                  <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
+            <div className="mt-14 grid gap-10 overflow-hidden rounded-[2rem] bg-ink p-8 text-parchment shadow-2xl shadow-ink/15 sm:p-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gold-light">Pay per funeral</p>
+                <p className="mt-6 font-display text-6xl font-semibold tracking-tight sm:text-8xl">R299.99</p>
+                <p className="mt-3 text-lg text-parchment/55">per published funeral</p>
+                <a href={registerUrl} className="group mt-8 inline-flex items-center gap-2 rounded-full bg-gold px-7 py-3.5 font-semibold text-ink transition hover:bg-gold-light">
+                  Create Funeral Home Account <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
                 </a>
               </div>
-              <div className="border-t border-white/10 bg-white/[0.035] p-8 sm:p-12 lg:border-l lg:border-t-0 lg:p-16">
-                <p className="font-display text-2xl font-semibold">Included every month</p>
+              <div className="border-t border-white/10 pt-8 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
+                <h3 className="font-display text-3xl">Publish each funeral for R299.99</h3>
                 <ul className="mt-7 space-y-4 text-parchment/75">
-                  {['5 complete memorial pages', 'QR code for every memorial', 'Programme, biography and gallery', 'Tribute wall and map directions', 'Memorial hosting included'].map((item) => (
-                    <li key={item} className="flex items-center gap-3">
-                      <span className="grid h-6 w-6 place-items-center rounded-full bg-gold/15 text-gold-light"><Check size={14} strokeWidth={2} /></span>
-                      {item}
-                    </li>
+                  {['Drafts are free', 'Public viewing included for 30 days', 'Programme, photos, directions, obituary and QR code', 'Secure payment through Paystack'].map((item) => (
+                    <li key={item} className="flex items-start gap-3"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gold/15 text-gold-light"><Check size={14} /></span>{item}</li>
                   ))}
                 </ul>
-                <div className="mt-9 border-t border-white/10 pt-7">
-                  <p className="text-sm text-parchment/45">Need more in a busy month?</p>
-                  <p className="mt-1 font-display text-3xl">R149 <span className="font-body text-base text-parchment/50">per extra memorial</span></p>
-                </div>
+                <p className="mt-7 text-sm leading-6 text-parchment/50">No monthly fees. No packages. No complicated subscriptions.</p>
               </div>
             </div>
           </div>

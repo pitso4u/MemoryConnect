@@ -4,8 +4,21 @@ import { prisma } from '../lib/prisma';
 import { authenticate, signToken } from '../middleware/auth';
 import { registerSchema, loginSchema } from '@memorialconnect/shared';
 import { isZodError } from '../lib/validation';
+import { z } from 'zod';
 
 const router = Router();
+
+const profileSchema = z.object({
+  name: z.string().min(2).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().max(40).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+  logoUrl: z.string().url().optional().nullable().or(z.literal('')),
+  primaryColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional().nullable(),
+  secondaryColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional().nullable(),
+  websiteUrl: z.string().url().optional().nullable().or(z.literal('')),
+  facebookUrl: z.string().url().optional().nullable().or(z.literal('')),
+});
 
 router.post('/register', async (req, res) => {
   try {
@@ -121,10 +134,44 @@ router.get('/me', authenticate, async (req, res) => {
       funeralHome: {
         id: user.funeralHome.id,
         name: user.funeralHome.name,
-        plan: user.funeralHome.plan,
+        email: user.funeralHome.email,
+        phone: user.funeralHome.phone,
+        address: user.funeralHome.address,
+        logoUrl: user.funeralHome.logoUrl,
+        primaryColor: user.funeralHome.primaryColor,
+        secondaryColor: user.funeralHome.secondaryColor,
+        websiteUrl: user.funeralHome.websiteUrl,
+        facebookUrl: user.funeralHome.facebookUrl,
+        analyticsAccessEnabled: user.funeralHome.analyticsAccessEnabled,
+        apiAccessEnabled: user.funeralHome.apiAccessEnabled,
+        dedicatedSupportEnabled: user.funeralHome.dedicatedSupportEnabled,
       },
     },
   });
+});
+
+router.get('/funeral-home-profile', authenticate, async (req, res) => {
+  const funeralHome = await prisma.funeralHome.findUnique({
+    where: { id: req.user!.funeralHomeId },
+    include: { branches: { orderBy: { name: 'asc' } }, users: { select: { id: true, name: true, email: true, role: true } } },
+  });
+  if (!funeralHome) return res.status(404).json({ success: false, error: 'Funeral home not found' });
+  res.json({ success: true, data: funeralHome });
+});
+
+router.patch('/funeral-home-profile', authenticate, async (req, res) => {
+  if (!['admin', 'SUPER_ADMIN'].includes(req.user!.role)) {
+    return res.status(403).json({ success: false, error: 'Only an admin can update the funeral home profile' });
+  }
+  try {
+    const body = profileSchema.parse(req.body);
+    const clean = Object.fromEntries(Object.entries(body).map(([key, value]) => [key, value === '' ? null : value]));
+    const funeralHome = await prisma.funeralHome.update({ where: { id: req.user!.funeralHomeId }, data: clean });
+    res.json({ success: true, data: funeralHome });
+  } catch (error) {
+    if (isZodError(error)) return res.status(400).json({ success: false, error: error.errors[0].message });
+    res.status(500).json({ success: false, error: 'Failed to update funeral home profile' });
+  }
 });
 
 export default router;

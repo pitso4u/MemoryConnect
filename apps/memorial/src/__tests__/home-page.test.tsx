@@ -12,7 +12,9 @@ describe('HomePage', () => {
     );
 
     expect(screen.getByRole('heading', { level: 1, name: 'Memory Connect' })).toBeInTheDocument();
-    expect(screen.getByText('R499')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View Demo Memorial' })).toHaveAttribute('href', '/msjevkt1');
+    expect(screen.getByText('R299.99')).toBeInTheDocument();
+    expect(screen.getByText('Publish each funeral for R299.99')).toBeInTheDocument();
+    expect(screen.getByText('No monthly fees. No packages. No complicated subscriptions.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View Demo Memorial' })).toHaveAttribute('href', '/demo');
   });
 });

@@ -15,7 +15,10 @@
     "build": "npm run build -w @memorialconnect/shared && npm run build -w @memorialconnect/api && npm run build -w @memorialconnect/admin && npm run build -w @memorialconnect/memorial",
     "db:generate": "npm run db:generate -w @memorialconnect/api",
     "db:migrate": "npm run db:migrate -w @memorialconnect/api",
-    "db:push": "npm run db:push -w @memorialconnect/api"
+    "db:push": "npm run db:push -w @memorialconnect/api",
+    "memorials:expire": "tsx scripts/expire-public-memorials.ts",
+    "memorials:delete": "tsx scripts/delete-expired-memorials.ts",
+    "memorials:delete-videos": "tsx scripts/delete-expired-videos.ts"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.19.1",

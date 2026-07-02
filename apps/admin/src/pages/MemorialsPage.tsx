@@ -7,6 +7,7 @@ export default function MemorialsPage() {
   const [memorials, setMemorials] = useState<Memorial[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState<'ALL' | 'DRAFT' | 'PAID_PENDING' | 'PUBLISHED' | 'LOCKED' | 'EXPIRED'>('ALL');
 
   useEffect(() => {
     api.getMemorials()
@@ -16,25 +17,42 @@ export default function MemorialsPage() {
   }, []);
 
   const statusColor: Record<string, string> = {
-    draft: 'bg-amber-100 text-amber-800',
-    published: 'bg-green-100 text-green-800',
-    archived: 'bg-gray-100 text-gray-600',
+    DRAFT: 'bg-amber-100 text-amber-800',
+    PAID_PENDING: 'bg-blue-100 text-blue-800',
+    PUBLISHED: 'bg-green-100 text-green-800',
+    LOCKED: 'bg-stone-200 text-stone-700',
+    EXPIRED: 'bg-red-100 text-red-700',
   };
 
+  const visibleMemorials = filter === 'ALL' ? memorials : memorials.filter((m) => m.status === filter);
+
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-3xl text-ink">Memorials</h1>
           <p className="text-muted mt-1">Manage your digital funeral programmes</p>
         </div>
         <Link
           to="/create"
-          className="flex items-center gap-2 px-5 py-2.5 bg-ink text-parchment rounded-lg text-sm font-medium hover:bg-ink-light transition"
+          className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-parchment transition hover:bg-ink-light"
         >
           <Plus size={18} />
           New Memorial
         </Link>
+      </div>
+      <div className="mb-6 flex flex-wrap gap-2">
+        {(['ALL', 'DRAFT', 'PAID_PENDING', 'PUBLISHED', 'LOCKED', 'EXPIRED'] as const).map((item) => (
+          <button
+            key={item}
+            onClick={() => setFilter(item)}
+            className={`rounded-full px-4 py-2 text-sm font-medium capitalize transition ${
+              filter === item ? 'bg-ink text-parchment' : 'bg-white text-muted hover:text-ink'
+            }`}
+          >
+            {item.replace('_', ' ').toLowerCase()}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -49,7 +67,7 @@ export default function MemorialsPage() {
             Try again
           </button>
         </div>
-      ) : memorials.length === 0 ? (
+      ) : visibleMemorials.length === 0 ? (
         <div className="text-center py-20 border-2 border-dashed border-parchment-dark rounded-xl">
           <p className="text-muted mb-4">No memorials yet</p>
           <Link to="/create" className="text-gold-dark hover:text-gold font-medium">
@@ -58,18 +76,18 @@ export default function MemorialsPage() {
         </div>
       ) : (
         <div className="grid gap-4">
-          {memorials.map((m) => (
+          {visibleMemorials.map((m) => (
             <Link
               key={m.id}
               to={`/memorial/${m.id}`}
-              className="block bg-white rounded-xl border border-parchment-dark p-6 hover:shadow-md hover:border-gold/30 transition group"
+              className="group block rounded-xl border border-parchment-dark bg-white p-4 transition hover:border-gold/30 hover:shadow-md sm:p-6"
             >
-              <div className="flex items-start justify-between">
-                <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
                   <h2 className="font-display text-xl text-ink group-hover:text-gold-dark transition">
                     {m.deceasedName}
                   </h2>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-muted">
+                  <div className="mt-2 flex flex-col gap-1 text-sm text-muted sm:flex-row sm:flex-wrap sm:gap-4">
                     {m.serviceDate && (
                       <span className="flex items-center gap-1">
                         <Calendar size={14} />
@@ -90,11 +108,15 @@ export default function MemorialsPage() {
                   </div>
                 </div>
                 <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusColor[m.status] || ''}`}>
-                  {m.status}
+                  {m.status.replace('_', ' ')}
                 </span>
               </div>
-              <p className="text-xs text-muted mt-3">
+              <p className="mt-3 break-words text-xs text-muted">
                 memoryconnect.co.za/{m.slug}
+                {m.publicExpiresAt && ['PUBLISHED', 'LOCKED'].includes(m.status) && (
+                  <span className="ml-3">Viewing ends {new Date(m.publicExpiresAt).toLocaleDateString('en-ZA')}</span>
+                )}
+                <span className="ml-3">{m.viewCount || 0} views</span>
               </p>
             </Link>
           ))}

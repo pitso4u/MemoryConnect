@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { api, MemorialDetail, ProgrammeItem } from '../lib/api';
+import { useNavigate, useParams } from 'react-router-dom';
+import { api, MemorialAnalytics, MemorialDetail, ProgrammeItem } from '../lib/api';
 import MemorialQrCode from '../components/MemorialQrCode';
 import { MemorialHeader } from '../components/memorial/MemorialHeader';
 import { ProjectorControls } from '../components/memorial/ProjectorControls';
@@ -9,10 +9,11 @@ import { PhotoManager } from '../components/memorial/PhotoManager';
 import { ObituaryEditor } from '../components/memorial/ObituaryEditor';
 import { TributeViewer } from '../components/memorial/TributeViewer';
 import { LocationManager } from '../components/memorial/LocationManager';
-import { FileText, Image, MapPinned, MessageSquare } from 'lucide-react';
+import { BarChart3, Eye, FileText, Image, Lock, MapPinned, MessageSquare } from 'lucide-react';
 
 export default function MemorialDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [memorial, setMemorial] = useState<MemorialDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'programme' | 'obituary' | 'photos' | 'locations' | 'tributes'>('programme');
@@ -23,6 +24,9 @@ export default function MemorialDetailPage() {
   const [photoCaption, setPhotoCaption] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [publishError, setPublishError] = useState('');
+  const [analytics, setAnalytics] = useState<MemorialAnalytics | null>(null);
+  const [paymentMessage, setPaymentMessage] = useState('');
 
   const load = () => {
     if (!id) return;
@@ -33,6 +37,27 @@ export default function MemorialDetailPage() {
   };
 
   useEffect(load, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const reference = new URLSearchParams(window.location.search).get('reference');
+    if (!reference) return;
+    setSaving(true);
+    setPaymentMessage('Verifying your Paystack payment...');
+    api.verifyPublishPayment(id, reference)
+      .then((updated) => {
+        setMemorial((current) => current ? { ...current, ...updated } : current);
+        setPaymentMessage('Payment verified. This funeral is now public.');
+        window.history.replaceState({}, '', window.location.pathname);
+      })
+      .catch((error) => setPublishError(error instanceof Error ? error.message : 'Payment could not be verified'))
+      .finally(() => setSaving(false));
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || !memorial || !['PUBLISHED', 'LOCKED', 'EXPIRED'].includes(memorial.status)) return;
+    api.getMemorialAnalytics(id).then(setAnalytics).catch(() => undefined);
+  }, [id, memorial?.status, memorial?.viewCount]);
 
   useEffect(() => {
     if (memorial) setObituaryText(memorial.obituary || '');
@@ -55,14 +80,26 @@ export default function MemorialDetailPage() {
   const handlePublish = async () => {
     if (!id || !memorial) return;
     setSaving(true);
+    setPublishError('');
     try {
-      const updated = await api.updateMemorial(id, {
-        status: memorial.status === 'published' ? 'draft' : 'published',
-      } as Partial<MemorialDetail>);
-      setMemorial({ ...memorial, status: updated.status });
+      const checkout = await api.initializePublishPayment(id);
+      window.location.assign(checkout.authorizationUrl);
     } catch (err) {
-      console.error(err);
+      setPublishError(err instanceof Error ? err.message : 'Could not update publishing status');
     } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || !memorial) return;
+    if (!window.confirm(`Permanently delete the funeral for ${memorial.deceasedName}? This cannot be undone.`)) return;
+    setSaving(true);
+    try {
+      await api.deleteMemorial(id);
+      navigate('/');
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : 'Could not delete funeral');
       setSaving(false);
     }
   };
@@ -137,6 +174,9 @@ export default function MemorialDetailPage() {
   if (loading) return <div className="p-8 text-muted">Loading...</div>;
   if (!memorial) return <div className="p-8 text-red-600">Memorial not found</div>;
 
+  const locked = memorial.status === 'LOCKED' || Boolean(memorial.editLocksAt && new Date(memorial.editLocksAt) <= new Date());
+  const canDelete = ['DRAFT', 'PAID_PENDING'].includes(memorial.status) || (memorial.status === 'PUBLISHED' && !locked);
+
   const demoNetworkUrl = memorial.settings?.demoNetworkUrl;
 
   const saveDemoNetworkUrl = async (url: string) => {
@@ -147,16 +187,37 @@ export default function MemorialDetailPage() {
   };
 
   return (
-    <div className="p-8">
-      <MemorialHeader memorial={memorial} saving={saving} onPublish={handlePublish} />
+    <div className="p-4 sm:p-6 lg:p-8">
+      <MemorialHeader memorial={memorial} saving={saving} onPublish={handlePublish} onDelete={handleDelete} canDelete={canDelete} />
+
+      {memorial.publicExpiresAt && ['PUBLISHED', 'LOCKED'].includes(memorial.status) && (
+        <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Public viewing is available until {new Date(memorial.publicExpiresAt).toLocaleDateString('en-ZA')}.
+        </div>
+      )}
+
+      {locked && (
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Lock size={17} /> This funeral programme is locked because it has already been published and shared.
+        </div>
+      )}
+
+      {paymentMessage && <div className="mb-6 rounded-xl border border-gold/30 bg-gold/10 px-4 py-3 text-sm text-ink">{paymentMessage}</div>}
+
+      {publishError && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span>{publishError}</span>
+          <span className="font-semibold">Publish each funeral for R299.99</span>
+        </div>
+      )}
 
       {/* Live Control Bar */}
-      <ProjectorControls
-        programme={memorial.programme}
-        currentIndex={memorial.currentProgrammeIndex}
-        onNext={() => handleProgrammeControl('next')}
-        onPrevious={() => handleProgrammeControl('previous')}
-      />
+      {!locked && <ProjectorControls
+          programme={memorial.programme}
+          currentIndex={memorial.currentProgrammeIndex}
+          onNext={() => handleProgrammeControl('next')}
+          onPrevious={() => handleProgrammeControl('previous')}
+        />}
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 overflow-x-auto border-b border-parchment-dark">
@@ -182,6 +243,7 @@ export default function MemorialDetailPage() {
         ))}
       </div>
 
+      <div className={locked ? 'pointer-events-none opacity-60' : ''} aria-disabled={locked}>
       {activeTab === 'programme' && (
         <ProgrammeEditor
           programme={memorial.programme}
@@ -227,13 +289,25 @@ export default function MemorialDetailPage() {
       {activeTab === 'tributes' && (
         <TributeViewer tributes={memorial.tributes} />
       )}
+      </div>
 
-      <MemorialQrCode
+      {['PUBLISHED', 'LOCKED'].includes(memorial.status) && <MemorialQrCode
         slug={memorial.slug}
         deceasedName={memorial.deceasedName}
         demoNetworkUrl={demoNetworkUrl}
         onSaveDemoUrl={saveDemoNetworkUrl}
-      />
+      />}
+
+      {analytics && (
+        <section className="mt-8 rounded-2xl border border-parchment-dark bg-white p-6">
+          <div className="flex items-center gap-2"><BarChart3 size={19} className="text-gold-dark" /><h2 className="font-display text-2xl text-ink">Public viewing</h2></div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            {[['Total views', analytics.totalViews], ['Views today', analytics.viewsToday], ['Last 7 days', analytics.viewsLast7Days]].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-parchment p-4"><p className="flex items-center gap-1.5 text-xs text-muted"><Eye size={13} />{label}</p><p className="mt-2 font-display text-3xl text-ink">{value}</p></div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
