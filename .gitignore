@@ -40,3 +40,10 @@ uploads/
 dev-dist/
 sw.js
 workbox-*.js
+
+# production/local files
+data/
+*.db
+*.db.backup-*
+.env.production
+apps/*/.env.production
