@@ -14,6 +14,7 @@ model FuneralHome {
   phone                    String?
   address                  String?
   logoUrl                  String?
+  plan                     String         @default("professional")
   primaryColor             String?
   secondaryColor           String?
   websiteUrl               String?
@@ -63,7 +64,7 @@ model Memorial {
   dateOfDeath           DateTime?
   serviceDate           DateTime?
   serviceVenue          String?
-  deceasedPhotoUrl      String?
+  deceasedPhotoUrl      String?            @map("coverPhotoUrl")
   obituary              String?
   biography             Json?
   programme             Json
