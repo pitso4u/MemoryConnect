@@ -12,6 +12,7 @@ import {
   QrCode,
   ShieldCheck,
 } from 'lucide-react';
+import { getAdminUrl } from '../lib/config';
 
 const steps = [
   ['Create a memorial page', 'Start with the service details and the name of the person being remembered.'],
@@ -29,15 +30,6 @@ const features = [
   { icon: MapPinned, label: 'Directions' },
   { icon: MessageCircleHeart, label: 'Tributes' },
 ];
-
-function getAdminUrl(path: string) {
-  const configuredUrl = import.meta.env.VITE_ADMIN_URL;
-  if (configuredUrl) return `${configuredUrl.replace(/\/$/, '')}${path}`;
-  if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:5173${path}`;
-  }
-  return `http://localhost:5173${path}`;
-}
 
 export default function HomePage() {
   const registerUrl = getAdminUrl('/register');

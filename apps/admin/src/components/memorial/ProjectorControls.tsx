@@ -1,4 +1,4 @@
-import { Play, SkipForward, SkipBack } from 'lucide-react';
+import { Pause, Play, SkipForward, SkipBack } from 'lucide-react';
 import { ProgrammeItem } from '@memorialconnect/shared';
 
 interface ProjectorControlsProps {
@@ -6,9 +6,20 @@ interface ProjectorControlsProps {
   currentIndex: number;
   onNext: () => void;
   onPrevious: () => void;
+  autoAdvance: boolean;
+  onAutoAdvanceChange: (enabled: boolean) => void;
+  busy?: boolean;
 }
 
-export function ProjectorControls({ programme, currentIndex, onNext, onPrevious }: ProjectorControlsProps) {
+export function ProjectorControls({
+  programme,
+  currentIndex,
+  onNext,
+  onPrevious,
+  autoAdvance,
+  onAutoAdvanceChange,
+  busy = false,
+}: ProjectorControlsProps) {
   const currentItem = programme[currentIndex];
   const nextItem = programme[currentIndex + 1];
 
@@ -29,16 +40,27 @@ export function ProjectorControls({ programme, currentIndex, onNext, onPrevious 
         <div className="flex items-center gap-2">
           <button
             onClick={onPrevious}
-            className="p-3 rounded-lg bg-white/10 hover:bg-white/20 transition"
+            disabled={busy || currentIndex <= 0}
+            aria-label="Previous programme item"
+            className="p-3 rounded-lg bg-white/10 hover:bg-white/20 transition disabled:opacity-40"
           >
             <SkipBack size={20} />
           </button>
-          <button className="p-3 rounded-lg bg-gold text-ink hover:bg-gold-light transition">
-            <Play size={20} />
+          <button
+            onClick={() => onAutoAdvanceChange(!autoAdvance)}
+            disabled={programme.length < 2}
+            aria-label={autoAdvance ? 'Pause auto-advance' : 'Start auto-advance'}
+            aria-pressed={autoAdvance}
+            title="Auto-advance every 60 seconds (Space)"
+            className="p-3 rounded-lg bg-gold text-ink hover:bg-gold-light transition disabled:opacity-40"
+          >
+            {autoAdvance ? <Pause size={20} /> : <Play size={20} />}
           </button>
           <button
             onClick={onNext}
-            className="p-3 rounded-lg bg-white/10 hover:bg-white/20 transition"
+            disabled={busy || currentIndex >= programme.length - 1}
+            aria-label="Next programme item"
+            className="p-3 rounded-lg bg-white/10 hover:bg-white/20 transition disabled:opacity-40"
           >
             <SkipForward size={20} />
           </button>
@@ -52,6 +74,9 @@ export function ProjectorControls({ programme, currentIndex, onNext, onPrevious 
           />
         </div>
       )}
+      <p className="mt-3 text-xs text-parchment/45">
+        {autoAdvance ? 'Auto-advance is on · next item in 60 seconds' : 'Use ←/→ to move · Space toggles auto-advance'}
+      </p>
     </div>
   );
 }

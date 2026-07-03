@@ -295,11 +295,16 @@ router.patch('/:id', authenticate, async (req, res) => {
 
 for (const [path, direction] of [['/:id/programme/next', 1], ['/:id/programme/previous', -1]] as const) {
   router.post(path, authenticate, async (req, res) => {
-    const memorial = await prisma.memorial.findFirst({ where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId } });
+    const memorial = await prisma.memorial.findFirst({
+      where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId, deletedAt: null },
+    });
     if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
-    if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return lockedResponse(res);
+    // Moving the live cursor is an operator action, not an edit to locked memorial content.
+    // It must remain available while a published service is being presented.
     const programme = memorial.programme as unknown[];
-    const currentProgrammeIndex = Math.max(0, Math.min(memorial.currentProgrammeIndex + direction, Math.max(0, programme.length - 1)));
+    const lastIndex = Math.max(0, programme.length - 1);
+    const boundedIndex = Math.max(0, Math.min(memorial.currentProgrammeIndex, lastIndex));
+    const currentProgrammeIndex = Math.max(0, Math.min(boundedIndex + direction, lastIndex));
     const updated = await prisma.memorial.update({ where: { id: memorial.id }, data: { currentProgrammeIndex } });
     res.json({ success: true, data: formatMemorial(updated as unknown as Record<string, unknown>) });
   });

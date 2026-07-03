@@ -1,28 +1,51 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, photoUrl, ProjectorData } from '../lib/api';
 
 export const SLIDESHOW_INTERVAL_MS = 8000;
+export const IMAGE_LOAD_TIMEOUT_MS = 7000;
+export const PROJECTOR_POLL_INTERVAL_MS = 3000;
 
 export default function ProjectorPage() {
   const { slug } = useParams<{ slug: string }>();
   const [data, setData] = useState<ProjectorData | null>(null);
   const [error, setError] = useState('');
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [displayedPhotoIndex, setDisplayedPhotoIndex] = useState<number | null>(null);
+  const [imageStateVersion, setImageStateVersion] = useState(0);
+  const imageStates = useRef(new Map<string, 'loading' | 'loaded' | 'failed'>());
+  const imageTimeouts = useRef(new Map<string, number>());
+  const imageElements = useRef(new Map<string, HTMLImageElement>());
   const previewToken = new URLSearchParams(window.location.search).get('preview') || undefined;
 
   useEffect(() => {
     if (!slug) return;
-    const fetchProjector = () =>
-      api.getProjector(slug, previewToken)
-        .then((projector) => {
+    let active = true;
+    let inFlight = false;
+    let hasData = false;
+    const fetchProjector = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const projector = await api.getProjector(slug, previewToken);
+        if (active) {
           setData(projector);
           setError('');
-        })
-        .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load projector data'));
-    fetchProjector();
-    const interval = window.setInterval(fetchProjector, 3000);
-    return () => window.clearInterval(interval);
+          hasData = true;
+        }
+      } catch (err) {
+        // Keep the live display on screen during a temporary polling failure.
+        if (active && !hasData) setError(err instanceof Error ? err.message : 'Failed to load projector data');
+      } finally {
+        inFlight = false;
+      }
+    };
+    void fetchProjector();
+    const interval = window.setInterval(() => void fetchProjector(), PROJECTOR_POLL_INTERVAL_MS);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, [slug, previewToken]);
 
   const photoCount = data?.photos.length || 0;
@@ -39,6 +62,55 @@ export default function ProjectorPage() {
   useEffect(() => {
     if (photoIndex >= photoCount) setPhotoIndex(0);
   }, [photoCount, photoIndex]);
+
+  useEffect(() => () => {
+    imageTimeouts.current.forEach((timeout) => window.clearTimeout(timeout));
+    imageTimeouts.current.clear();
+    imageElements.current.forEach((image) => {
+      image.onload = null;
+      image.onerror = null;
+    });
+    imageElements.current.clear();
+  }, []);
+
+  useEffect(() => {
+    if (!data || photoCount === 0) {
+      setDisplayedPhotoIndex(null);
+      return;
+    }
+
+    const queue = [photoIndex, (photoIndex + 1) % photoCount, (photoIndex - 1 + photoCount) % photoCount];
+    [...new Set(queue)].forEach((index) => {
+      // TODO: Prefer a generated thumbnail here before warming the full-resolution asset.
+      const url = photoUrl(data.photos[index].url);
+      if (imageStates.current.has(url)) return;
+
+      imageStates.current.set(url, 'loading');
+      const image = new Image();
+      imageElements.current.set(url, image);
+      const settle = (state: 'loaded' | 'failed') => {
+        const timeout = imageTimeouts.current.get(url);
+        if (timeout) window.clearTimeout(timeout);
+        imageTimeouts.current.delete(url);
+        image.onload = null;
+        image.onerror = null;
+        imageElements.current.delete(url);
+        imageStates.current.set(url, state);
+        setImageStateVersion((version) => version + 1);
+      };
+      image.onload = () => settle('loaded');
+      image.onerror = () => settle('failed');
+      imageTimeouts.current.set(url, window.setTimeout(() => settle('failed'), IMAGE_LOAD_TIMEOUT_MS));
+      image.src = url;
+    });
+  }, [data, photoCount, photoIndex]);
+
+  useEffect(() => {
+    if (!data || photoCount === 0) return;
+    const desiredUrl = photoUrl(data.photos[photoIndex].url);
+    const state = imageStates.current.get(desiredUrl);
+    if (state === 'loaded' || state === 'failed') setDisplayedPhotoIndex(photoIndex);
+  }, [data, imageStateVersion, photoCount, photoIndex]);
 
   if (!data && !error) {
     return (
@@ -71,7 +143,15 @@ export default function ProjectorPage() {
   const progress = data.totalItems > 0
     ? ((data.currentIndex + 1) / data.totalItems) * 100
     : 0;
-  const currentPhoto = data.photos[photoIndex];
+  const currentPhoto = displayedPhotoIndex === null ? null : data.photos[displayedPhotoIndex];
+  const currentPhotoUrl = currentPhoto ? photoUrl(currentPhoto.url) : '';
+  const currentPhotoFailed = currentPhoto ? imageStates.current.get(currentPhotoUrl) === 'failed' : false;
+
+  const markDisplayedPhotoFailed = () => {
+    if (!currentPhotoUrl || imageStates.current.get(currentPhotoUrl) === 'failed') return;
+    imageStates.current.set(currentPhotoUrl, 'failed');
+    setImageStateVersion((version) => version + 1);
+  };
 
   if (photoCount === 0) {
     return (
@@ -87,34 +167,41 @@ export default function ProjectorPage() {
     <main className="relative min-h-screen select-none overflow-hidden bg-[#08080d] text-white">
       <div
         className="absolute inset-0 scale-110 bg-cover bg-center opacity-30 blur-3xl transition-[background-image] duration-1000"
-        style={{ backgroundImage: `url(${photoUrl(currentPhoto.url)})` }}
+        style={{ backgroundImage: currentPhoto && !currentPhotoFailed ? `url(${currentPhotoUrl})` : undefined }}
         aria-hidden="true"
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_42%,transparent_0%,rgba(0,0,0,0.18)_48%,rgba(0,0,0,0.72)_100%)]" />
 
       <div className="relative z-10 grid min-h-screen lg:grid-cols-[minmax(0,1.6fr)_minmax(22rem,0.72fr)]">
         <section className="relative min-h-[56vh] overflow-hidden lg:min-h-screen" aria-label="Memorial photo slideshow">
-          {data.photos.map((photo, index) => (
+          {currentPhoto && !currentPhotoFailed ? (
             <img
-              key={photo.id}
-              src={photoUrl(photo.url)}
-              alt={photo.caption || `Memorial photograph ${index + 1} of ${photoCount}`}
-              aria-hidden={index !== photoIndex}
-              data-active={index === photoIndex ? 'true' : 'false'}
-              className={`absolute inset-0 h-full w-full object-contain p-4 transition-all duration-[1600ms] ease-in-out sm:p-8 ${
-                index === photoIndex ? 'scale-100 opacity-100' : 'pointer-events-none scale-[1.015] opacity-0'
-              }`}
+              key={currentPhoto.id}
+              src={currentPhotoUrl}
+              alt={currentPhoto.caption || `Memorial photograph ${displayedPhotoIndex! + 1} of ${photoCount}`}
+              data-active="true"
+              loading="eager"
+              decoding="async"
+              onError={markDisplayedPhotoFailed}
+              className="absolute inset-0 h-full w-full object-contain p-4 transition-opacity duration-700 sm:p-8"
             />
-          ))}
+          ) : (
+            <div className="absolute inset-0 grid place-items-center p-8 text-center" role={currentPhotoFailed ? 'img' : 'status'} aria-label={currentPhotoFailed ? 'Photograph unavailable' : undefined}>
+              <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 px-8 py-7 text-white/55 backdrop-blur-sm">
+                <p className="font-display text-2xl text-white/75">{currentPhotoFailed ? 'Photograph unavailable' : 'Preparing photograph…'}</p>
+                <p className="mt-2 text-sm">{currentPhotoFailed ? 'The slideshow will continue automatically.' : 'The programme remains live while this image loads.'}</p>
+              </div>
+            </div>
+          )}
 
           <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/70 to-transparent lg:hidden" />
           <div className="absolute left-5 top-5 rounded-full border border-white/15 bg-black/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/75 backdrop-blur-md sm:left-8 sm:top-8">
             In loving memory
           </div>
           <div className="absolute bottom-5 right-5 rounded-full bg-black/40 px-3 py-1.5 text-xs tabular-nums text-white/70 backdrop-blur-md sm:bottom-8 sm:right-8">
-            {photoIndex + 1} / {photoCount}
+            {(displayedPhotoIndex ?? photoIndex) + 1} / {photoCount}
           </div>
-          {currentPhoto.caption && (
+          {currentPhoto?.caption && !currentPhotoFailed && (
             <p className="absolute bottom-5 left-5 max-w-[70%] text-sm text-white/75 drop-shadow-lg sm:bottom-8 sm:left-8 sm:text-base">
               {currentPhoto.caption}
             </p>
@@ -129,7 +216,7 @@ export default function ProjectorPage() {
             {data.photos.map((photo, index) => (
               <span
                 key={photo.id}
-                className={`h-1 rounded-full transition-all duration-700 ${index === photoIndex ? 'w-8 bg-amber-400' : 'w-3 bg-white/15'}`}
+                className={`h-1 rounded-full transition-all duration-700 ${index === (displayedPhotoIndex ?? photoIndex) ? 'w-8 bg-amber-400' : 'w-3 bg-white/15'}`}
                 aria-hidden="true"
               />
             ))}

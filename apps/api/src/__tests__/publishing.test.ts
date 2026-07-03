@@ -140,11 +140,37 @@ describe('pay-per-funeral lifecycle', () => {
   it('allows edits before the lock and blocks edits and deletion after it', async () => {
     const { funeralHome, token } = await home('lock');
     const memorial = await draft(funeralHome.id, 'Lock Test');
-    await prisma.memorial.update({ where: { id: memorial.id }, data: { status: MEMORIAL_STATUS.PUBLISHED, editLocksAt: addHours(new Date(), 1), publicExpiresAt: addHours(new Date(), 24) } });
+    const programme = [
+      { id: 'opening', type: 'welcome', title: 'Welcome', order: 0 },
+      { id: 'tribute', type: 'tribute', title: 'Family tribute', order: 1 },
+    ];
+    await prisma.memorial.update({
+      where: { id: memorial.id },
+      data: {
+        status: MEMORIAL_STATUS.PUBLISHED,
+        editLocksAt: addHours(new Date(), 1),
+        publicExpiresAt: addHours(new Date(), 24),
+        programme,
+      },
+    });
     expect((await request(app).patch(`/api/v1/memorials/${memorial.id}`).set('Authorization', `Bearer ${token}`).send({ obituary: 'Correction' })).status).toBe(200);
     await prisma.memorial.update({ where: { id: memorial.id }, data: { editLocksAt: addHours(new Date(), -1) } });
     expect((await request(app).patch(`/api/v1/memorials/${memorial.id}`).set('Authorization', `Bearer ${token}`).send({ obituary: 'Too late' })).status).toBe(423);
     expect((await request(app).delete(`/api/v1/memorials/${memorial.id}`).set('Authorization', `Bearer ${token}`)).status).toBe(423);
+
+    const next = await request(app)
+      .post(`/api/v1/memorials/${memorial.id}/programme/next`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(next.status).toBe(200);
+    expect(next.body.data.currentProgrammeIndex).toBe(1);
+    const liveProjector = await request(app).get(`/api/v1/public/memorials/${memorial.slug}/projector`);
+    expect(liveProjector.body.data).toMatchObject({ currentIndex: 1, currentItem: programme[1] });
+
+    const previous = await request(app)
+      .post(`/api/v1/memorials/${memorial.id}/programme/previous`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(previous.status).toBe(200);
+    expect(previous.body.data.currentProgrammeIndex).toBe(0);
     await prisma.funeralHome.delete({ where: { id: funeralHome.id } });
   });
 

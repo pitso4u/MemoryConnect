@@ -27,6 +27,8 @@ export default function MemorialDetailPage() {
   const [publishError, setPublishError] = useState('');
   const [analytics, setAnalytics] = useState<MemorialAnalytics | null>(null);
   const [paymentMessage, setPaymentMessage] = useState('');
+  const [programmeControlBusy, setProgrammeControlBusy] = useState(false);
+  const [autoAdvance, setAutoAdvance] = useState(false);
 
   const load = () => {
     if (!id) return;
@@ -105,11 +107,45 @@ export default function MemorialDetailPage() {
   };
 
   const handleProgrammeControl = async (action: 'next' | 'previous') => {
-    if (!id) return;
+    if (!id || programmeControlBusy) return;
     const fn = action === 'next' ? api.programmeNext : api.programmePrevious;
-    const updated = await fn(id);
-    setMemorial((prev) => prev ? { ...prev, currentProgrammeIndex: updated.currentProgrammeIndex } : prev);
+    setProgrammeControlBusy(true);
+    try {
+      const updated = await fn(id);
+      setMemorial((prev) => prev ? { ...prev, currentProgrammeIndex: updated.currentProgrammeIndex } : prev);
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : 'Could not move the live programme');
+      setAutoAdvance(false);
+    } finally {
+      setProgrammeControlBusy(false);
+    }
   };
+
+  useEffect(() => {
+    if (!autoAdvance || !memorial || memorial.currentProgrammeIndex >= memorial.programme.length - 1) return;
+    const interval = window.setInterval(() => void handleProgrammeControl('next'), 60_000);
+    return () => window.clearInterval(interval);
+  }, [autoAdvance, memorial?.currentProgrammeIndex, memorial?.programme.length, id, programmeControlBusy]);
+
+  useEffect(() => {
+    if (!autoAdvance || !memorial || memorial.currentProgrammeIndex < memorial.programme.length - 1) return;
+    setAutoAdvance(false);
+  }, [autoAdvance, memorial?.currentProgrammeIndex, memorial?.programme.length]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
+      if (event.key === 'ArrowRight') void handleProgrammeControl('next');
+      else if (event.key === 'ArrowLeft') void handleProgrammeControl('previous');
+      else if (event.code === 'Space') {
+        event.preventDefault();
+        setAutoAdvance((enabled) => !enabled);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [id, programmeControlBusy]);
 
   const saveProgramme = async (programme: ProgrammeItem[]) => {
     if (!id || !memorial) return;
@@ -212,12 +248,15 @@ export default function MemorialDetailPage() {
       )}
 
       {/* Live Control Bar */}
-      {!locked && <ProjectorControls
-          programme={memorial.programme}
-          currentIndex={memorial.currentProgrammeIndex}
-          onNext={() => handleProgrammeControl('next')}
-          onPrevious={() => handleProgrammeControl('previous')}
-        />}
+      <ProjectorControls
+        programme={memorial.programme}
+        currentIndex={memorial.currentProgrammeIndex}
+        onNext={() => handleProgrammeControl('next')}
+        onPrevious={() => handleProgrammeControl('previous')}
+        autoAdvance={autoAdvance}
+        onAutoAdvanceChange={setAutoAdvance}
+        busy={programmeControlBusy}
+      />
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 overflow-x-auto border-b border-parchment-dark">
