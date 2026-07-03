@@ -37,11 +37,39 @@ export default function MemorialPage() {
 
   useEffect(() => {
     if (!slug) return;
-    api.getMemorial(slug, previewToken)
-      .then(setMemorial)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load memorial'))
-      .finally(() => setLoading(false));
+    let active = true;
+    let inFlight = false;
+    let isFirstLoad = true;
 
+    const fetchMemorial = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const data = await api.getMemorial(slug, previewToken);
+        if (active) {
+          setMemorial(data);
+          setError('');
+        }
+      } catch (err) {
+        if (active && isFirstLoad) {
+          setError(err instanceof Error ? err.message : 'Failed to load memorial');
+        }
+      } finally {
+        inFlight = false;
+        if (active && isFirstLoad) {
+          setLoading(false);
+          isFirstLoad = false;
+        }
+      }
+    };
+
+    void fetchMemorial();
+    const interval = window.setInterval(() => void fetchMemorial(), 4000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, [slug, previewToken]);
 
   if (loading) {
