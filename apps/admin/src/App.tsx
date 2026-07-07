@@ -9,6 +9,11 @@ import CreateMemorialPage from './pages/CreateMemorialPage';
 import MemorialDetailPage from './pages/MemorialDetailPage';
 import PaymentsPage from './pages/PaymentsPage';
 import ProfilePage from './pages/ProfilePage';
+import FamilyInvitePage from './pages/FamilyInvitePage';
+
+function isFamilyRole(role?: string) {
+  return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, isLoading } = useAuth();
@@ -17,11 +22,29 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RoleRedirect() {
+  const { user } = useAuth();
+  return <Navigate to={isFamilyRole(user?.role) ? '/family' : '/dashboard'} replace />;
+}
+
+function FuneralHomeOnly({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (isFamilyRole(user?.role)) return <Navigate to="/family" replace />;
+  return <>{children}</>;
+}
+
+function FamilyOnly({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!isFamilyRole(user?.role)) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/family/invite/:token" element={<FamilyInvitePage />} />
       <Route
         path="/"
         element={
@@ -30,11 +53,24 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<MemorialsPage />} />
-        <Route path="create" element={<CreateMemorialPage />} />
-        <Route path="memorial/:id" element={<MemorialDetailPage />} />
-        <Route path="payments" element={<PaymentsPage />} />
-        <Route path="profile" element={<ProfilePage />} />
+        <Route index element={<RoleRedirect />} />
+        <Route path="dashboard" element={<MemorialsPage />} />
+        <Route path="memorials" element={<MemorialsPage />} />
+        <Route path="create" element={<FuneralHomeOnly><CreateMemorialPage /></FuneralHomeOnly>} />
+        <Route path="memorial/:id" element={<FuneralHomeOnly><MemorialDetailPage /></FuneralHomeOnly>} />
+        <Route path="payments" element={<FuneralHomeOnly><PaymentsPage /></FuneralHomeOnly>} />
+        <Route path="billing" element={<FuneralHomeOnly><PaymentsPage /></FuneralHomeOnly>} />
+        <Route path="profile" element={<FuneralHomeOnly><ProfilePage /></FuneralHomeOnly>} />
+        <Route path="settings" element={<FuneralHomeOnly><ProfilePage /></FuneralHomeOnly>} />
+        <Route path="staff" element={<FuneralHomeOnly><ProfilePage /></FuneralHomeOnly>} />
+        <Route path="analytics" element={<FuneralHomeOnly><MemorialsPage /></FuneralHomeOnly>} />
+        <Route path="family" element={<FamilyOnly><MemorialsPage /></FamilyOnly>} />
+        <Route path="family/memorials" element={<FamilyOnly><MemorialsPage /></FamilyOnly>} />
+        <Route path="family/memorials/:id" element={<FamilyOnly><MemorialDetailPage /></FamilyOnly>} />
+        <Route path="family/memorials/:id/photos" element={<FamilyOnly><MemorialDetailPage initialTab="photos" /></FamilyOnly>} />
+        <Route path="family/memorials/:id/biography" element={<FamilyOnly><MemorialDetailPage initialTab="obituary" /></FamilyOnly>} />
+        <Route path="family/memorials/:id/programme-suggestions" element={<FamilyOnly><MemorialDetailPage initialTab="programme" /></FamilyOnly>} />
+        <Route path="family/memorials/:id/preview" element={<FamilyOnly><MemorialDetailPage /></FamilyOnly>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

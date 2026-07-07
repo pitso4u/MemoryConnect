@@ -10,6 +10,7 @@ import locationRoutes from './routes/locations';
 import publicRoutes from './routes/public';
 import paymentRoutes from './routes/payments';
 import adminRoutes from './routes/admin';
+import familyRoutes from './routes/family';
 import { UPLOADS_DIR } from './lib/uploads';
 import { printServerUrls } from './lib/network';
 import { env } from './lib/env';
@@ -92,6 +93,7 @@ app.use('/api/v1/memorials/:id/photos', photoRoutes);
 app.use('/api/v1/public', publicRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/family', familyRoutes);
 
 // Legacy routes for backward compatibility (will be deprecated)
 app.use('/api/auth', authLimiter, authRoutes);
@@ -99,6 +101,7 @@ app.use('/api/memorials', memorialRoutes);
 app.use('/api/memorials/:id/locations', locationRoutes);
 app.use('/api/memorials/:id/photos', photoRoutes);
 app.use('/api/m', publicRoutes);
+app.use('/api/family', familyRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, MemorialAnalytics, MemorialDetail, ProgrammeItem } from '../lib/api';
+import { api, FamilyAccess, MemorialAnalytics, MemorialDetail, ProgrammeItem } from '../lib/api';
 import MemorialQrCode from '../components/MemorialQrCode';
 import { MemorialHeader } from '../components/memorial/MemorialHeader';
 import { ProjectorControls } from '../components/memorial/ProjectorControls';
@@ -9,14 +9,26 @@ import { PhotoManager } from '../components/memorial/PhotoManager';
 import { ObituaryEditor } from '../components/memorial/ObituaryEditor';
 import { TributeViewer } from '../components/memorial/TributeViewer';
 import { LocationManager } from '../components/memorial/LocationManager';
-import { BarChart3, Eye, FileText, Image, Lock, MapPinned, MessageSquare } from 'lucide-react';
+import { BarChart3, Copy, Eye, FileText, Image, Lock, MapPinned, MessageSquare, UserPlus } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-export default function MemorialDetailPage() {
+type DetailTab = 'programme' | 'obituary' | 'photos' | 'locations' | 'tributes';
+
+function isFamilyRole(role?: string) {
+  return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
+}
+
+function canManageFamilyInvites(role?: string) {
+  return role === 'SUPER_ADMIN' || role === 'FUNERAL_HOME_ADMIN';
+}
+
+export default function MemorialDetailPage({ initialTab = 'programme' }: { initialTab?: DetailTab }) {
+  const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [memorial, setMemorial] = useState<MemorialDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'programme' | 'obituary' | 'photos' | 'locations' | 'tributes'>('programme');
+  const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
   const [saving, setSaving] = useState(false);
   const [obituaryText, setObituaryText] = useState('');
   const [obituaryStatus, setObituaryStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -29,6 +41,15 @@ export default function MemorialDetailPage() {
   const [paymentMessage, setPaymentMessage] = useState('');
   const [programmeControlBusy, setProgrammeControlBusy] = useState(false);
   const [autoAdvance, setAutoAdvance] = useState(false);
+  const [inviteName, setInviteName] = useState('');
+  const [inviteContact, setInviteContact] = useState('');
+  const [inviteRole, setInviteRole] = useState<'FAMILY_MANAGER' | 'FAMILY_CONTRIBUTOR'>('FAMILY_MANAGER');
+  const [inviteUrl, setInviteUrl] = useState('');
+  const [familyAccess, setFamilyAccess] = useState<FamilyAccess[]>([]);
+  const [inviteError, setInviteError] = useState('');
+
+  const familyUser = isFamilyRole(user?.role);
+  const funeralHomeAdmin = canManageFamilyInvites(user?.role);
 
   const load = () => {
     if (!id) return;
@@ -39,6 +60,8 @@ export default function MemorialDetailPage() {
   };
 
   useEffect(load, [id]);
+
+  useEffect(() => setActiveTab(initialTab), [initialTab]);
 
   useEffect(() => {
     if (!id) return;
@@ -57,9 +80,14 @@ export default function MemorialDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (!id || !memorial || !['PUBLISHED', 'LOCKED', 'EXPIRED'].includes(memorial.status)) return;
+    if (familyUser || !id || !memorial || !['PUBLISHED', 'LOCKED', 'EXPIRED'].includes(memorial.status)) return;
     api.getMemorialAnalytics(id).then(setAnalytics).catch(() => undefined);
-  }, [id, memorial?.status, memorial?.viewCount]);
+  }, [familyUser, id, memorial?.status, memorial?.viewCount]);
+
+  useEffect(() => {
+    if (!id || !funeralHomeAdmin) return;
+    api.getFamilyAccess(id).then(setFamilyAccess).catch(() => undefined);
+  }, [id, funeralHomeAdmin]);
 
   useEffect(() => {
     if (memorial) setObituaryText(memorial.obituary || '');
@@ -99,7 +127,7 @@ export default function MemorialDetailPage() {
     setSaving(true);
     try {
       await api.deleteMemorial(id);
-      navigate('/');
+      navigate('/dashboard');
     } catch (error) {
       setPublishError(error instanceof Error ? error.message : 'Could not delete funeral');
       setSaving(false);
@@ -207,11 +235,38 @@ export default function MemorialDetailPage() {
     setMemorial({ ...memorial, photos: memorial.photos.filter((p) => p.id !== photoId) });
   };
 
+  const handleInviteFamily = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!id) return;
+    setInviteError('');
+    setInviteUrl('');
+    const isEmail = inviteContact.includes('@');
+    try {
+      const invitation = await api.createFamilyInvitation(id, {
+        name: inviteName,
+        role: inviteRole,
+        email: isEmail ? inviteContact : undefined,
+        phone: isEmail ? undefined : inviteContact,
+      });
+      setInviteUrl(invitation.inviteUrl);
+      setInviteName('');
+      setInviteContact('');
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : 'Could not create invitation');
+    }
+  };
+
+  const handleRevokeFamilyAccess = async (accessId: string) => {
+    if (!id) return;
+    await api.revokeFamilyAccess(id, accessId);
+    setFamilyAccess((current) => current.filter((item) => item.id !== accessId));
+  };
+
   if (loading) return <div className="p-8 text-muted">Loading...</div>;
   if (!memorial) return <div className="p-8 text-red-600">Memorial not found</div>;
 
   const locked = memorial.status === 'LOCKED' || Boolean(memorial.editLocksAt && new Date(memorial.editLocksAt) <= new Date());
-  const canDelete = ['DRAFT', 'PAID_PENDING'].includes(memorial.status) || (memorial.status === 'PUBLISHED' && !locked);
+  const canDelete = !familyUser && (['DRAFT', 'PAID_PENDING'].includes(memorial.status) || (memorial.status === 'PUBLISHED' && !locked));
 
   const demoNetworkUrl = memorial.settings?.demoNetworkUrl;
 
@@ -224,7 +279,47 @@ export default function MemorialDetailPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
-      <MemorialHeader memorial={memorial} saving={saving} onPublish={handlePublish} onDelete={handleDelete} canDelete={canDelete} />
+      {!familyUser && <MemorialHeader memorial={memorial} saving={saving} onPublish={handlePublish} onDelete={handleDelete} canDelete={canDelete} />}
+      {familyUser && (
+        <div className="mb-6">
+          <h1 className="font-display text-3xl text-ink">{memorial.deceasedName}</h1>
+          <p className="mt-1 text-muted">Family contributor access</p>
+        </div>
+      )}
+
+      {funeralHomeAdmin && (
+        <section className="mb-6 rounded-xl border border-parchment-dark bg-white p-5">
+          <div className="flex items-center gap-2">
+            <UserPlus size={18} className="text-gold-dark" />
+            <h2 className="font-display text-xl text-ink">Invite Family</h2>
+          </div>
+          <form onSubmit={handleInviteFamily} className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_220px_auto]">
+            <input value={inviteName} onChange={(e) => setInviteName(e.target.value)} required placeholder="Family member name" className="rounded-lg border border-parchment-dark px-3 py-2 text-sm outline-none focus:border-gold" />
+            <input value={inviteContact} onChange={(e) => setInviteContact(e.target.value)} required placeholder="Email or phone" className="rounded-lg border border-parchment-dark px-3 py-2 text-sm outline-none focus:border-gold" />
+            <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as typeof inviteRole)} className="rounded-lg border border-parchment-dark px-3 py-2 text-sm outline-none focus:border-gold">
+              <option value="FAMILY_MANAGER">Family Manager</option>
+              <option value="FAMILY_CONTRIBUTOR">Family Contributor</option>
+            </select>
+            <button className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-parchment">Invite</button>
+          </form>
+          {inviteError && <p className="mt-3 text-sm text-red-600">{inviteError}</p>}
+          {inviteUrl && (
+            <button type="button" onClick={() => navigator.clipboard?.writeText(inviteUrl)} className="mt-3 flex w-full items-center gap-2 rounded-lg bg-parchment px-3 py-2 text-left text-sm text-ink">
+              <Copy size={15} /> <span className="truncate">{inviteUrl}</span>
+            </button>
+          )}
+          {familyAccess.length > 0 && (
+            <div className="mt-4 divide-y divide-parchment-dark text-sm">
+              {familyAccess.map((access) => (
+                <div key={access.id} className="flex items-center justify-between gap-3 py-2">
+                  <span className="min-w-0 truncate">{access.user.name} · {access.user.email} · {access.role.replace('FAMILY_', '').toLowerCase()}</span>
+                  <button type="button" onClick={() => handleRevokeFamilyAccess(access.id)} className="text-red-600 hover:text-red-700">Revoke</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {memorial.publicExpiresAt && ['PUBLISHED', 'LOCKED'].includes(memorial.status) && (
         <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -248,7 +343,7 @@ export default function MemorialDetailPage() {
       )}
 
       {/* Live Control Bar */}
-      <ProjectorControls
+      {!familyUser && <ProjectorControls
         programme={memorial.programme}
         currentIndex={memorial.currentProgrammeIndex}
         onNext={() => handleProgrammeControl('next')}
@@ -256,7 +351,7 @@ export default function MemorialDetailPage() {
         autoAdvance={autoAdvance}
         onAutoAdvanceChange={setAutoAdvance}
         busy={programmeControlBusy}
-      />
+      />}
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 overflow-x-auto border-b border-parchment-dark">
@@ -284,7 +379,11 @@ export default function MemorialDetailPage() {
 
       <div className={locked ? 'pointer-events-none opacity-60' : ''} aria-disabled={locked}>
       {activeTab === 'programme' && (
-        <ProgrammeEditor
+        familyUser ? (
+          <div className="rounded-xl border border-parchment-dark bg-white p-6 text-sm text-muted">
+            Programme changes can be suggested to the funeral home from this portal.
+          </div>
+        ) : <ProgrammeEditor
           programme={memorial.programme}
           currentIndex={memorial.currentProgrammeIndex}
           onUpdateItem={updateProgrammeItem}
@@ -330,7 +429,7 @@ export default function MemorialDetailPage() {
       )}
       </div>
 
-      {['PUBLISHED', 'LOCKED'].includes(memorial.status) && <MemorialQrCode
+      {!familyUser && ['PUBLISHED', 'LOCKED'].includes(memorial.status) && <MemorialQrCode
         slug={memorial.slug}
         deceasedName={memorial.deceasedName}
         demoNetworkUrl={demoNetworkUrl}

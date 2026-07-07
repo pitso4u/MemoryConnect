@@ -1,7 +1,7 @@
 import { Router, Request } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
-import { authenticate, signPreviewToken } from '../middleware/auth';
+import { authenticate, canAccessMemorial, canManageFuneralHome, isFamilyRole, isFuneralHomeRole, normalizeRole, ROLES, signPreviewToken } from '../middleware/auth';
 import { createMemorialSlug, formatMemorial } from '../lib/utils';
 import { env } from '../lib/env';
 import { initializePaystackTransaction, verifyPaystackTransaction } from '../lib/paystack';
@@ -70,6 +70,17 @@ async function syncLockedMemorials(funeralHomeId: string) {
 
 router.get('/', authenticate, async (req, res) => {
   try {
+    if (isFamilyRole(req.user!.role)) {
+      const access = await prisma.memorialAccess.findMany({
+        where: { userId: req.user!.userId, memorial: { status: { not: MEMORIAL_STATUS.DELETED } } },
+        include: { memorial: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      return res.json({ success: true, data: access.map((item) => formatMemorial(item.memorial as unknown as Record<string, unknown>)) });
+    }
+    if (!req.user!.funeralHomeId || !isFuneralHomeRole(req.user!.role)) {
+      return res.status(403).json({ success: false, error: 'Funeral home access required' });
+    }
     await syncLockedMemorials(req.user!.funeralHomeId);
     const memorials = await prisma.memorial.findMany({
       where: { funeralHomeId: req.user!.funeralHomeId, status: { not: MEMORIAL_STATUS.DELETED } },
@@ -83,6 +94,9 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 router.post('/', authenticate, async (req, res) => {
+  if (!req.user!.funeralHomeId || !isFuneralHomeRole(req.user!.role)) {
+    return res.status(403).json({ success: false, error: 'Only funeral home users can create memorials' });
+  }
   try {
     const body = createSchema.parse(req.body);
     const memorial = await prisma.memorial.create({
@@ -108,6 +122,9 @@ router.post('/', authenticate, async (req, res) => {
 });
 
 router.get('/:id/analytics', authenticate, async (req, res) => {
+  if (!req.user!.funeralHomeId || !isFuneralHomeRole(req.user!.role)) {
+    return res.status(403).json({ success: false, error: 'Analytics are only available to funeral home users' });
+  }
   const access = await prisma.funeralHome.findUnique({ where: { id: req.user!.funeralHomeId }, select: { analyticsAccessEnabled: true } });
   if (!access?.analyticsAccessEnabled) return res.status(403).json({ success: false, error: 'Analytics access is not enabled for this funeral home' });
   const memorial = await prisma.memorial.findFirst({ where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId } });
@@ -140,8 +157,10 @@ router.get('/:id/analytics', authenticate, async (req, res) => {
 });
 
 router.get('/:id/preview-token', authenticate, async (req, res) => {
+  const access = await canAccessMemorial(req.user!, paramId(req));
+  if (!access) return res.status(404).json({ success: false, error: 'Memorial not found' });
   const memorial = await prisma.memorial.findFirst({
-    where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId, deletedAt: null },
+    where: { id: access.id, deletedAt: null },
     select: { id: true, funeralHomeId: true },
   });
   if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
@@ -152,6 +171,9 @@ router.get('/:id/preview-token', authenticate, async (req, res) => {
 });
 
 router.post('/:id/initialize-publish-payment', authenticate, async (req, res) => {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Only funeral home admins can publish memorials' });
+  }
   if (!env.PAYSTACK_SECRET_KEY) {
     return res.status(503).json({
       success: false,
@@ -228,6 +250,9 @@ router.post('/:id/initialize-publish-payment', authenticate, async (req, res) =>
 });
 
 router.get('/:id/verify-publish-payment/:reference', authenticate, async (req, res) => {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Only funeral home admins can verify publishing payments' });
+  }
   const memorial = await prisma.memorial.findFirst({ where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId } });
   if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
   const reference = Array.isArray(req.params.reference) ? req.params.reference[0] : req.params.reference;
@@ -245,9 +270,11 @@ router.get('/:id/verify-publish-payment/:reference', authenticate, async (req, r
 
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    await syncLockedMemorials(req.user!.funeralHomeId);
+    if (req.user!.funeralHomeId) await syncLockedMemorials(req.user!.funeralHomeId);
+    const access = await canAccessMemorial(req.user!, paramId(req));
+    if (!access) return res.status(404).json({ success: false, error: 'Memorial not found' });
     const memorial = await prisma.memorial.findFirst({
-      where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId },
+      where: { id: access.id },
       include: {
         photos: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
         tributes: { orderBy: { createdAt: 'desc' } },
@@ -266,12 +293,23 @@ router.patch('/:id', authenticate, async (req, res) => {
   try {
     const id = paramId(req);
     const body = updateSchema.parse(req.body);
-    const existing = await prisma.memorial.findFirst({ where: { id, funeralHomeId: req.user!.funeralHomeId } });
+    const access = await canAccessMemorial(req.user!, id);
+    if (!access) return res.status(404).json({ success: false, error: 'Memorial not found' });
+    const existing = await prisma.memorial.findFirst({ where: { id } });
     if (!existing) return res.status(404).json({ success: false, error: 'Memorial not found' });
     if (existing.status === MEMORIAL_STATUS.DELETED) return res.status(410).json({ success: false, error: 'Memorial has been deleted' });
     if (isEditLocked(existing) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return lockedResponse(res);
 
     const { biography, programme, announcements, settings, ...rest } = body;
+    const role = normalizeRole(req.user!.role);
+    if (role === ROLES.FAMILY_CONTRIBUTOR) {
+      const allowed = ['obituary', 'biography'] as const;
+      const attempted = Object.keys(body).filter((key) => !allowed.includes(key as typeof allowed[number]));
+      if (attempted.length) return res.status(403).json({ success: false, error: 'Family contributors can only suggest edits and add tribute content' });
+    }
+    if (isFamilyRole(role) && (announcements || settings || rest.deceasedName !== undefined || rest.serviceDate !== undefined || rest.serviceVenue !== undefined || rest.deceasedPhotoUrl !== undefined)) {
+      return res.status(403).json({ success: false, error: 'Family users cannot edit funeral home controlled publishing details' });
+    }
     const memorial = await prisma.memorial.update({
       where: { id },
       data: {
@@ -285,6 +323,11 @@ router.patch('/:id', authenticate, async (req, res) => {
         serviceDate: body.serviceDate !== undefined ? body.serviceDate ? new Date(body.serviceDate) : null : undefined,
       },
     });
+    if (body.obituary !== undefined || body.biography !== undefined) {
+      await prisma.memorialAuditLog.create({
+        data: { memorialId: id, userId: req.user!.userId, action: 'biography_edited', details: { fields: Object.keys(body) } },
+      });
+    }
     res.json({ success: true, data: formatMemorial(memorial as unknown as Record<string, unknown>) });
   } catch (error) {
     if (isZodError(error)) return res.status(400).json({ success: false, error: error.errors[0].message });
@@ -295,6 +338,12 @@ router.patch('/:id', authenticate, async (req, res) => {
 
 for (const [path, direction] of [['/:id/programme/next', 1], ['/:id/programme/previous', -1]] as const) {
   router.post(path, authenticate, async (req, res) => {
+    if (isFamilyRole(req.user!.role)) {
+      return res.status(403).json({ success: false, error: 'Family users cannot control the live programme' });
+    }
+    if (!req.user!.funeralHomeId) {
+      return res.status(403).json({ success: false, error: 'Funeral home access required' });
+    }
     const memorial = await prisma.memorial.findFirst({
       where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId, deletedAt: null },
     });
@@ -311,7 +360,7 @@ for (const [path, direction] of [['/:id/programme/next', 1], ['/:id/programme/pr
 }
 
 router.delete('/:id', authenticate, async (req, res) => {
-  if (req.user!.role.toLowerCase() !== 'admin' && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
     return res.status(403).json({ success: false, error: 'Only a funeral home admin can delete a memorial' });
   }
   const memorial = await prisma.memorial.findFirst({ where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId } });
@@ -321,6 +370,9 @@ router.delete('/:id', authenticate, async (req, res) => {
     return lockedResponse(res);
   }
   const deleted = await permanentlyDeleteMemorial(memorial.id);
+  await prisma.memorialAuditLog.create({
+    data: { memorialId: memorial.id, userId: req.user!.userId, action: 'memorial_deleted', details: { status: memorial.status } },
+  });
   res.json({ success: true, data: deleted });
 });
 

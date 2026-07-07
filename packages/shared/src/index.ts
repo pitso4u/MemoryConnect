@@ -186,8 +186,8 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'staff' | 'SUPER_ADMIN';
-  funeralHomeId: string;
+  role: 'SUPER_ADMIN' | 'FUNERAL_HOME_ADMIN' | 'FUNERAL_HOME_STAFF' | 'FAMILY_MANAGER' | 'FAMILY_CONTRIBUTOR';
+  funeralHomeId?: string | null;
 }
 
 /**

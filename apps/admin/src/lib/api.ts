@@ -60,13 +60,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   login: (email: string, password: string) =>
-    request<{ accessToken: string; user: { id: string; name: string; email: string } }>(
+    request<{ accessToken: string; user: AuthUser }>(
       '/api/v1/auth/login',
       { method: 'POST', body: JSON.stringify({ email, password }) }
     ),
 
   register: (data: { funeralHomeName: string; name: string; email: string; password: string }) =>
-    request<{ accessToken: string; user: { id: string; name: string; email: string } }>(
+    request<{ accessToken: string; user: AuthUser }>(
       '/api/v1/auth/register',
       { method: 'POST', body: JSON.stringify(data) }
     ),
@@ -97,6 +97,24 @@ export const api = {
 
   deleteMemorial: (id: string) =>
     request<{ filesDeleted: number; bytesDeleted: number }>(`/api/v1/memorials/${id}`, { method: 'DELETE' }),
+
+  createFamilyInvitation: (memorialId: string, data: { name: string; email?: string; phone?: string; role: 'FAMILY_MANAGER' | 'FAMILY_CONTRIBUTOR' }) =>
+    request<FamilyInvitation>(`/api/v1/family/memorials/${memorialId}/invitations`, { method: 'POST', body: JSON.stringify(data) }),
+
+  getFamilyAccess: (memorialId: string) =>
+    request<FamilyAccess[]>(`/api/v1/family/memorials/${memorialId}/access`),
+
+  revokeFamilyAccess: (memorialId: string, accessId: string) =>
+    request<null>(`/api/v1/family/memorials/${memorialId}/access/${accessId}`, { method: 'DELETE' }),
+
+  getFamilyInvite: (token: string) =>
+    request<FamilyInvitePreview>(`/api/v1/family/invite/${encodeURIComponent(token)}`),
+
+  acceptFamilyInvite: (token: string, data: { name?: string; email?: string; password?: string }) =>
+    request<{ accessToken: string; user: AuthUser }>(`/api/v1/family/invite/${encodeURIComponent(token)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   getMemorialAnalytics: (id: string) =>
     request<MemorialAnalytics>(`/api/v1/memorials/${id}/analytics`),
@@ -178,6 +196,46 @@ interface MemorialPhoto {
   caption?: string;
   category: string;
   order: number;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  funeralHomeId?: string | null;
+}
+
+export interface FamilyInvitation {
+  id: string;
+  memorialId: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  role: 'FAMILY_MANAGER' | 'FAMILY_CONTRIBUTOR';
+  expiresAt: string;
+  acceptedAt?: string | null;
+  inviteUrl: string;
+}
+
+export interface FamilyAccess {
+  id: string;
+  memorialId: string;
+  userId: string;
+  role: 'FAMILY_MANAGER' | 'FAMILY_CONTRIBUTOR';
+  createdAt: string;
+  user: { id: string; name: string; email: string };
+}
+
+export interface FamilyInvitePreview {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  role: 'FAMILY_MANAGER' | 'FAMILY_CONTRIBUTOR';
+  expiresAt: string;
+  memorial: { id: string; deceasedName: string; serviceDate?: string | null };
+  funeralHome: { name: string };
 }
 
 export interface FuneralHomeProfile {

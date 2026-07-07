@@ -3,18 +3,30 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Building2, CreditCard, LayoutDashboard, LogOut, Menu, Plus, X } from 'lucide-react';
 
-const navigation = [
-  { to: '/', label: 'Memorials', icon: LayoutDashboard, end: true },
+const funeralHomeNavigation = [
+  { to: '/dashboard', label: 'Memorials', icon: LayoutDashboard, end: true },
+  { to: '/memorials', label: 'All Memorials', icon: LayoutDashboard },
   { to: '/create', label: 'New Memorial', icon: Plus },
-  { to: '/payments', label: 'Payments', icon: CreditCard },
+  { to: '/billing', label: 'Billing', icon: CreditCard },
   { to: '/profile', label: 'Profile & branding', icon: Building2 },
 ];
+
+const familyNavigation = [
+  { to: '/family', label: 'My Memorials', icon: LayoutDashboard, end: true },
+  { to: '/family/memorials', label: 'Assigned Memorials', icon: LayoutDashboard },
+];
+
+function isFamilyRole(role?: string) {
+  return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
+}
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigation = isFamilyRole(user?.role) ? familyNavigation : funeralHomeNavigation;
+  const portalLabel = isFamilyRole(user?.role) ? 'Family Portal' : 'Admin Portal';
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
@@ -48,7 +60,7 @@ export default function DashboardLayout() {
       <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-white/10 bg-ink px-4 text-parchment shadow-sm md:hidden">
         <div className="min-w-0">
           <p className="truncate font-display text-lg leading-tight">Memory Connect</p>
-          <p className="text-[11px] text-parchment/50">Admin Portal</p>
+          <p className="text-[11px] text-parchment/50">{portalLabel}</p>
         </div>
         <button
           type="button"
@@ -80,7 +92,7 @@ export default function DashboardLayout() {
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-ink text-parchment md:flex">
         <div className="border-b border-white/10 p-6">
           <h1 className="font-display text-xl">Memory Connect</h1>
-          <p className="mt-1 text-xs text-parchment/50">Admin Portal</p>
+          <p className="mt-1 text-xs text-parchment/50">{portalLabel}</p>
         </div>
         {navItems()}
         <div className="border-t border-white/10 p-4">

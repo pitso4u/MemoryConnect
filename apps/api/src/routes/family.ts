@@ -1,0 +1,224 @@
+import { Router, Request } from 'express';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { z } from 'zod';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../lib/prisma';
+import { env } from '../lib/env';
+import { isZodError } from '../lib/validation';
+import { authenticate, canManageFuneralHome, normalizeRole, ROLES, signToken } from '../middleware/auth';
+
+const router = Router();
+
+const FAMILY_ROLES = [ROLES.FAMILY_MANAGER, ROLES.FAMILY_CONTRIBUTOR] as const;
+
+const inviteSchema = z.object({
+  name: z.string().trim().min(2),
+  email: z.string().trim().email().optional().nullable(),
+  phone: z.string().trim().min(5).max(40).optional().nullable(),
+  role: z.enum(FAMILY_ROLES),
+}).refine((value) => value.email || value.phone, {
+  message: 'Provide an email address or phone number',
+});
+
+const acceptSchema = z.object({
+  name: z.string().trim().min(2).optional(),
+  email: z.string().trim().email().optional(),
+  password: z.string().min(8).optional(),
+});
+
+function param(req: Request, key: string) {
+  const value = req.params[key];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function tokenHash(token: string) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+async function audit(memorialId: string, userId: string | null, action: string, details?: Record<string, unknown>) {
+  await prisma.memorialAuditLog.create({
+    data: { memorialId, userId, action, details: details as Prisma.InputJsonValue | undefined },
+  });
+}
+
+router.post('/memorials/:id/invitations', authenticate, async (req, res) => {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Only funeral home admins can invite family members' });
+  }
+
+  try {
+    const memorialId = param(req, 'id');
+    const memorial = await prisma.memorial.findFirst({
+      where: { id: memorialId, funeralHomeId: req.user!.funeralHomeId, deletedAt: null },
+      select: { id: true, funeralHomeId: true },
+    });
+    if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+
+    const body = inviteSchema.parse(req.body);
+    const token = crypto.randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    const invitation = await prisma.familyInvitation.create({
+      data: {
+        memorialId,
+        funeralHomeId: memorial.funeralHomeId,
+        invitedByUserId: req.user!.userId,
+        name: body.name,
+        email: body.email || null,
+        phone: body.phone || null,
+        role: body.role,
+        tokenHash: tokenHash(token),
+        expiresAt,
+      },
+    });
+
+    await audit(memorialId, req.user!.userId, 'family_invite_created', {
+      invitationId: invitation.id,
+      role: body.role,
+      email: body.email || null,
+      phone: body.phone || null,
+    });
+
+    const baseUrl = (env.ADMIN_URL || 'http://localhost:5173').replace(/\/$/, '');
+    res.status(201).json({
+      success: true,
+      data: {
+        ...invitation,
+        inviteUrl: `${baseUrl}/family/invite/${token}`,
+      },
+    });
+  } catch (error) {
+    if (isZodError(error)) return res.status(400).json({ success: false, error: error.errors[0].message });
+    console.error('Create family invitation error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create family invitation' });
+  }
+});
+
+router.get('/invite/:token', async (req, res) => {
+  const invitation = await prisma.familyInvitation.findUnique({
+    where: { tokenHash: tokenHash(param(req, 'token')) },
+    include: { memorial: { select: { id: true, deceasedName: true, serviceDate: true } }, funeralHome: { select: { name: true } } },
+  });
+  if (!invitation || invitation.expiresAt <= new Date() || invitation.acceptedAt) {
+    return res.status(404).json({ success: false, error: 'Invitation is invalid or expired' });
+  }
+  res.json({
+    success: true,
+    data: {
+      id: invitation.id,
+      name: invitation.name,
+      email: invitation.email,
+      phone: invitation.phone,
+      role: invitation.role,
+      expiresAt: invitation.expiresAt,
+      memorial: invitation.memorial,
+      funeralHome: invitation.funeralHome,
+    },
+  });
+});
+
+router.post('/invite/:token/accept', async (req, res) => {
+  try {
+    const body = acceptSchema.parse(req.body);
+    const invitation = await prisma.familyInvitation.findUnique({
+      where: { tokenHash: tokenHash(param(req, 'token')) },
+    });
+    if (!invitation || invitation.expiresAt <= new Date() || invitation.acceptedAt) {
+      return res.status(404).json({ success: false, error: 'Invitation is invalid or expired' });
+    }
+
+    const email = body.email || invitation.email;
+    if (!email) return res.status(400).json({ success: false, error: 'An email address is required to accept this invitation' });
+
+    let user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      if (!body.password) return res.status(400).json({ success: false, error: 'Create a password to accept this invitation' });
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: body.name || invitation.name,
+          passwordHash: await bcrypt.hash(body.password, 12),
+          role: invitation.role,
+          funeralHomeId: null,
+        },
+      });
+    } else if (!FAMILY_ROLES.includes(normalizeRole(user.role) as typeof FAMILY_ROLES[number])) {
+      return res.status(403).json({ success: false, error: 'This invitation must be accepted with a family account' });
+    }
+
+    await prisma.$transaction([
+      prisma.memorialAccess.upsert({
+        where: { memorialId_userId: { memorialId: invitation.memorialId, userId: user.id } },
+        create: {
+          memorialId: invitation.memorialId,
+          userId: user.id,
+          role: invitation.role,
+          grantedByUserId: invitation.invitedByUserId,
+        },
+        update: { role: invitation.role, grantedByUserId: invitation.invitedByUserId },
+      }),
+      prisma.familyInvitation.update({
+        where: { id: invitation.id },
+        data: { acceptedAt: new Date() },
+      }),
+      prisma.memorialAuditLog.create({
+        data: {
+          memorialId: invitation.memorialId,
+          userId: user.id,
+          action: 'invite_accepted',
+          details: { invitationId: invitation.id, role: invitation.role },
+        },
+      }),
+    ]);
+
+    const accessToken = signToken({ userId: user.id, funeralHomeId: user.funeralHomeId, role: user.role });
+    res.json({
+      success: true,
+      data: {
+        accessToken,
+        user: { id: user.id, email: user.email, name: user.name, role: normalizeRole(user.role), funeralHomeId: user.funeralHomeId },
+      },
+    });
+  } catch (error) {
+    if (isZodError(error)) return res.status(400).json({ success: false, error: error.errors[0].message });
+    console.error('Accept family invitation error:', error);
+    res.status(500).json({ success: false, error: 'Failed to accept invitation' });
+  }
+});
+
+router.get('/memorials/:id/access', authenticate, async (req, res) => {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Only funeral home admins can manage family access' });
+  }
+  const memorialId = param(req, 'id');
+  const memorial = await prisma.memorial.findFirst({ where: { id: memorialId, funeralHomeId: req.user!.funeralHomeId } });
+  if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+
+  const access = await prisma.memorialAccess.findMany({
+    where: { memorialId },
+    include: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ success: true, data: access });
+});
+
+router.delete('/memorials/:id/access/:accessId', authenticate, async (req, res) => {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Only funeral home admins can revoke family access' });
+  }
+  const memorialId = param(req, 'id');
+  const accessId = param(req, 'accessId');
+  const access = await prisma.memorialAccess.findFirst({
+    where: { id: accessId, memorialId, memorial: { funeralHomeId: req.user!.funeralHomeId } },
+  });
+  if (!access) return res.status(404).json({ success: false, error: 'Family access not found' });
+  await prisma.$transaction([
+    prisma.memorialAccess.delete({ where: { id: access.id } }),
+    prisma.memorialAuditLog.create({
+      data: { memorialId, userId: req.user!.userId, action: 'family_access_revoked', details: { revokedUserId: access.userId, role: access.role } },
+    }),
+  ]);
+  res.json({ success: true, data: null });
+});
+
+export default router;

@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import { completePublishPayment, MEMORIAL_STATUS, PAYMENT_PURPOSE, PAYMENT_STATUS, verifyPaystackSignature } from '../lib/publishing';
-import { authenticate } from '../middleware/auth';
+import { authenticate, isFuneralHomeRole } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 
 const router = Router();
 
 router.get('/', authenticate, async (req, res) => {
+  if (!req.user!.funeralHomeId || !isFuneralHomeRole(req.user!.role)) {
+    return res.status(403).json({ success: false, error: 'Payments are only available to funeral home users' });
+  }
   const payments = await prisma.payment.findMany({
     where: { funeralHomeId: req.user!.funeralHomeId },
     include: { memorial: { select: { deceasedName: true } } },

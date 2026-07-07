@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { prisma } from '../lib/prisma';
-import { authenticate } from '../middleware/auth';
+import { authenticate, canAccessMemorial, isFamilyRole } from '../middleware/auth';
 import { ensureUploadsDir, photoPublicUrl, UPLOADS_DIR } from '../lib/uploads';
 import { isEditLocked } from '../lib/publishing';
 
@@ -53,8 +53,9 @@ router.post('/', authenticate, (req, res) => {
     }
 
     try {
-      const memorial = await prisma.memorial.findFirst({
-        where: { id: memorialId, funeralHomeId: req.user!.funeralHomeId },
+      const access = await canAccessMemorial(req.user!, memorialId);
+      const memorial = access && await prisma.memorial.findFirst({
+        where: { id: access.id },
         include: { photos: true },
       });
 
@@ -98,6 +99,9 @@ router.post('/', authenticate, (req, res) => {
           deceasedPhotoUrl: memorial.deceasedPhotoUrl || photos[0]?.url,
         },
       });
+      await prisma.memorialAuditLog.create({
+        data: { memorialId, userId: req.user!.userId, action: 'photo_uploaded', details: { count: photos.length, category } },
+      });
 
       res.status(201).json({ success: true, data: photos });
     } catch (error) {
@@ -112,9 +116,12 @@ router.delete('/:photoId', authenticate, async (req, res) => {
     const memorialId = paramId(req);
     const photoId = paramPhotoId(req);
 
-    const memorial = await prisma.memorial.findFirst({
-      where: { id: memorialId, funeralHomeId: req.user!.funeralHomeId },
-    });
+    if (isFamilyRole(req.user!.role)) {
+      return res.status(403).json({ success: false, error: 'Family users cannot delete photos' });
+    }
+
+    const access = await canAccessMemorial(req.user!, memorialId);
+    const memorial = access && await prisma.memorial.findFirst({ where: { id: access.id } });
 
     if (!memorial) {
       return res.status(404).json({ success: false, error: 'Memorial not found' });

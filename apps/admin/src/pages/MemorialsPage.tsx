@@ -2,8 +2,14 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, Memorial } from '../lib/api';
 import { Plus, Calendar, MapPin } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
+function isFamilyRole(role?: string) {
+  return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
+}
 
 export default function MemorialsPage() {
+  const { user } = useAuth();
   const [memorials, setMemorials] = useState<Memorial[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,21 +31,22 @@ export default function MemorialsPage() {
   };
 
   const visibleMemorials = filter === 'ALL' ? memorials : memorials.filter((m) => m.status === filter);
+  const familyUser = isFamilyRole(user?.role);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl text-ink">Memorials</h1>
-          <p className="text-muted mt-1">Manage your digital funeral programmes</p>
+          <h1 className="font-display text-3xl text-ink">{familyUser ? 'Family memorials' : 'Memorials'}</h1>
+          <p className="text-muted mt-1">{familyUser ? 'View and contribute to assigned memorials' : 'Manage your digital funeral programmes'}</p>
         </div>
-        <Link
+        {!familyUser && <Link
           to="/create"
           className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-parchment transition hover:bg-ink-light"
         >
           <Plus size={18} />
           New Memorial
-        </Link>
+        </Link>}
       </div>
       <div className="mb-6 flex flex-wrap gap-2">
         {(['ALL', 'DRAFT', 'PAID_PENDING', 'PUBLISHED', 'LOCKED', 'EXPIRED'] as const).map((item) => (
@@ -69,17 +76,17 @@ export default function MemorialsPage() {
         </div>
       ) : visibleMemorials.length === 0 ? (
         <div className="text-center py-20 border-2 border-dashed border-parchment-dark rounded-xl">
-          <p className="text-muted mb-4">No memorials yet</p>
-          <Link to="/create" className="text-gold-dark hover:text-gold font-medium">
+          <p className="text-muted mb-4">{familyUser ? 'No assigned memorials yet' : 'No memorials yet'}</p>
+          {!familyUser && <Link to="/create" className="text-gold-dark hover:text-gold font-medium">
             Create your first memorial
-          </Link>
+          </Link>}
         </div>
       ) : (
         <div className="grid gap-4">
           {visibleMemorials.map((m) => (
             <Link
               key={m.id}
-              to={`/memorial/${m.id}`}
+              to={familyUser ? `/family/memorials/${m.id}` : `/memorial/${m.id}`}
               className="group block rounded-xl border border-parchment-dark bg-white p-4 transition hover:border-gold/30 hover:shadow-md sm:p-6"
             >
               <div className="flex items-start justify-between gap-3">

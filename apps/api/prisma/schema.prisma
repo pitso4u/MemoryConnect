@@ -31,6 +31,7 @@ model FuneralHome {
   legacyPayments           LegacyPayment[]
   subscriptions            Subscription[]
   usageLedger              UsageLedger[]
+  familyInvitations        FamilyInvitation[]
 }
 
 model Branch {
@@ -52,9 +53,12 @@ model User {
   email         String      @unique
   passwordHash  String
   name          String
-  role          String      @default("staff")
-  funeralHomeId String
-  funeralHome   FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  role          String      @default("FUNERAL_HOME_STAFF")
+  funeralHomeId String?
+  funeralHome   FuneralHome? @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  memorialAccess MemorialAccess[]
+  invitationsSent FamilyInvitation[] @relation("FamilyInvitationInviter")
+  auditLogs     MemorialAuditLog[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 }
@@ -95,12 +99,67 @@ model Memorial {
   tributes              Tribute[]
   views                  MemorialView[]
   usageLedger            UsageLedger[]
+  familyInvitations      FamilyInvitation[]
+  accessGrants           MemorialAccess[]
+  auditLogs              MemorialAuditLog[]
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
   @@index([status, publicExpiresAt])
   @@index([deleteAfter, deletedAt])
   @@index([funeralHomeId, status])
+}
+
+model FamilyInvitation {
+  id              String    @id @default(cuid())
+  memorialId      String
+  memorial        Memorial  @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  funeralHomeId   String
+  funeralHome     FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  invitedByUserId String
+  invitedByUser   User      @relation("FamilyInvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  name            String
+  email           String?
+  phone           String?
+  role            String
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([memorialId])
+  @@index([funeralHomeId])
+  @@index([email])
+  @@index([phone])
+}
+
+model MemorialAccess {
+  id              String   @id @default(cuid())
+  memorialId      String
+  memorial        Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role            String
+  grantedByUserId String
+  createdAt       DateTime @default(now())
+
+  @@unique([memorialId, userId])
+  @@index([userId])
+  @@index([memorialId])
+}
+
+model MemorialAuditLog {
+  id         String   @id @default(cuid())
+  memorialId String
+  memorial   Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([memorialId, createdAt])
+  @@index([userId])
 }
 
 model Payment {

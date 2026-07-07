@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
-import { authenticate, signToken } from '../middleware/auth';
+import { authenticate, canManageFuneralHome, isFuneralHomeRole, normalizeRole, ROLES, signToken } from '../middleware/auth';
 import { registerSchema, loginSchema } from '@memorialconnect/shared';
 import { isZodError } from '../lib/validation';
 import { z } from 'zod';
@@ -38,7 +38,7 @@ router.post('/register', async (req, res) => {
             name: body.name,
             email: body.email,
             passwordHash,
-            role: 'admin',
+            role: ROLES.FUNERAL_HOME_ADMIN,
           },
         },
       },
@@ -60,7 +60,7 @@ router.post('/register', async (req, res) => {
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: normalizeRole(user.role),
           funeralHomeId: funeralHome.id,
         },
       },
@@ -89,7 +89,7 @@ router.post('/login', async (req, res) => {
     const token = signToken({
       userId: user.id,
       funeralHomeId: user.funeralHomeId,
-      role: user.role,
+      role: normalizeRole(user.role),
     });
 
     res.json({
@@ -100,7 +100,7 @@ router.post('/login', async (req, res) => {
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: normalizeRole(user.role),
           funeralHomeId: user.funeralHomeId,
         },
       },
@@ -130,9 +130,9 @@ router.get('/me', authenticate, async (req, res) => {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: normalizeRole(user.role),
       funeralHomeId: user.funeralHomeId,
-      funeralHome: {
+      funeralHome: user.funeralHome ? {
         id: user.funeralHome.id,
         name: user.funeralHome.name,
         email: user.funeralHome.email,
@@ -146,12 +146,15 @@ router.get('/me', authenticate, async (req, res) => {
         analyticsAccessEnabled: user.funeralHome.analyticsAccessEnabled,
         apiAccessEnabled: user.funeralHome.apiAccessEnabled,
         dedicatedSupportEnabled: user.funeralHome.dedicatedSupportEnabled,
-      },
+      } : null,
     },
   });
 });
 
 router.get('/funeral-home-profile', authenticate, async (req, res) => {
+  if (!isFuneralHomeRole(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Funeral home access required' });
+  }
   const funeralHome = await prisma.funeralHome.findUnique({
     where: { id: req.user!.funeralHomeId },
     include: { branches: { orderBy: { name: 'asc' } }, users: { select: { id: true, name: true, email: true, role: true } } },
@@ -161,7 +164,7 @@ router.get('/funeral-home-profile', authenticate, async (req, res) => {
 });
 
 router.patch('/funeral-home-profile', authenticate, async (req, res) => {
-  if (!['admin', 'SUPER_ADMIN'].includes(req.user!.role)) {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
     return res.status(403).json({ success: false, error: 'Only an admin can update the funeral home profile' });
   }
   try {

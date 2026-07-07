@@ -4,7 +4,7 @@ import {
   updateMemorialLocationSchema,
 } from '@memorialconnect/shared';
 import { prisma } from '../lib/prisma';
-import { authenticate } from '../middleware/auth';
+import { authenticate, canAccessMemorial, isFamilyRole, normalizeRole, ROLES } from '../middleware/auth';
 import { isZodError } from '../lib/validation';
 import { isEditLocked } from '../lib/publishing';
 
@@ -17,10 +17,9 @@ function routeParam(req: Request, key: 'id' | 'locationId'): string {
 
 async function ownedMemorial(req: Request) {
   const id = routeParam(req, 'id');
-  const memorial = await prisma.memorial.findFirst({
-    where: { id, funeralHomeId: req.user!.funeralHomeId },
-  });
-  return memorial;
+  const access = await canAccessMemorial(req.user!, id);
+  if (!access) return null;
+  return prisma.memorial.findFirst({ where: { id: access.id } });
 }
 
 router.get('/', authenticate, async (req, res) => {
@@ -38,6 +37,9 @@ router.post('/', authenticate, async (req, res) => {
   try {
     const memorial = await ownedMemorial(req);
     if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+    if (normalizeRole(req.user!.role) === ROLES.FAMILY_CONTRIBUTOR) {
+      return res.status(403).json({ success: false, error: 'Family contributors can suggest edits but cannot add locations' });
+    }
     if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return res.status(423).json({ success: false, error: 'This funeral programme is locked because it has already been published and shared.' });
     const memorialId = memorial.id;
 
@@ -55,6 +57,11 @@ router.post('/', authenticate, async (req, res) => {
         orderIndex: body.orderIndex ?? (lastLocation._max.orderIndex ?? -1) + 1,
       },
     });
+    if (isFamilyRole(req.user!.role)) {
+      await prisma.memorialAuditLog.create({
+        data: { memorialId, userId: req.user!.userId, action: 'gps_location_suggested', details: { locationId: location.id, name: location.name } },
+      });
+    }
     res.status(201).json({ success: true, data: location });
   } catch (error) {
     if (isZodError(error)) {
@@ -69,6 +76,9 @@ router.patch('/:locationId', authenticate, async (req, res) => {
   try {
     const memorial = await ownedMemorial(req);
     if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+    if (isFamilyRole(req.user!.role)) {
+      return res.status(403).json({ success: false, error: 'Family users cannot modify approved locations' });
+    }
     if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return res.status(423).json({ success: false, error: 'This funeral programme is locked because it has already been published and shared.' });
     const memorialId = memorial.id;
 
@@ -98,6 +108,9 @@ router.patch('/:locationId', authenticate, async (req, res) => {
 router.delete('/:locationId', authenticate, async (req, res) => {
   const memorial = await ownedMemorial(req);
   if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+  if (isFamilyRole(req.user!.role)) {
+    return res.status(403).json({ success: false, error: 'Family users cannot delete locations' });
+  }
   if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return res.status(423).json({ success: false, error: 'This funeral programme is locked because it has already been published and shared.' });
   const memorialId = memorial.id;
 
