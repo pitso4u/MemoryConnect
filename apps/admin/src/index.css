@@ -15,12 +15,40 @@
 }
 
 body {
-  font-family: var(--font-body);
-  background-color: var(--color-parchment);
-  color: var(--color-ink);
+  --brand-primary: var(--color-ink);
+  --brand-secondary: var(--color-parchment);
+  --brand-accent: var(--color-gold);
+  --brand-background: var(--color-parchment);
+  --brand-text: var(--color-ink);
+  --brand-radius: 12px;
+  --brand-font: var(--font-body);
+  font-family: var(--brand-font);
+  background-color: var(--brand-background);
+  color: var(--brand-text);
   -webkit-font-smoothing: antialiased;
 }
 
 .font-display {
   font-family: var(--font-display);
+}
+
+.brand-surface {
+  background: color-mix(in srgb, var(--brand-background) 92%, white);
+  color: var(--brand-text);
+}
+
+.brand-card {
+  border-radius: var(--brand-radius);
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 14%, transparent);
+  background: color-mix(in srgb, var(--brand-secondary) 82%, white);
+}
+
+.brand-button {
+  border-radius: var(--brand-radius);
+  background: var(--brand-primary);
+  color: var(--brand-secondary);
+}
+
+.brand-button:hover {
+  background: color-mix(in srgb, var(--brand-primary) 84%, var(--brand-accent));
 }

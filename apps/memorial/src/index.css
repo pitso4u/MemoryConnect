@@ -13,9 +13,16 @@
 }
 
 body {
-  font-family: var(--font-body);
-  background-color: var(--color-ink);
-  color: var(--color-parchment);
+  --brand-primary: var(--color-ink);
+  --brand-secondary: var(--color-parchment);
+  --brand-accent: var(--color-gold);
+  --brand-background: var(--color-ink);
+  --brand-text: var(--color-parchment);
+  --brand-radius: 12px;
+  --brand-font: var(--font-body);
+  font-family: var(--brand-font);
+  background-color: var(--brand-background);
+  color: var(--brand-text);
   -webkit-font-smoothing: antialiased;
 }
 

@@ -13,12 +13,39 @@ model FuneralHome {
   email                    String         @unique
   phone                    String?
   address                  String?
+  tradingName              String?
   logoUrl                  String?
+  iconUrl                  String?
   plan                     String         @default("professional")
   primaryColor             String?
   secondaryColor           String?
+  accentColor              String?
+  backgroundColor          String?
+  textColor                String?
+  fontFamily               String?
+  buttonStyle              String?
+  cardStyle                String?
+  borderRadius             String?
+  whatsapp                 String?
   websiteUrl               String?
   facebookUrl              String?
+  instagramUrl             String?
+  tiktokUrl                String?
+  footerText               String?
+  copyrightText            String?
+  whiteLabelEnabled        Boolean        @default(false)
+  themeTemplate            String         @default("classic")
+  homeBackgroundUrl        String?
+  loginBackgroundUrl       String?
+  memorialHeroUrl          String?
+  projectorBackgroundUrl   String?
+  pdfWatermarkUrl          String?
+  splashScreenUrl          String?
+  memorialStyle            String         @default("rounded")
+  animationLevel           String         @default("subtle")
+  galleryLayout            String         @default("grid")
+  timelineStyle            String         @default("classic")
+  programmeStyle           String         @default("formal")
   analyticsAccessEnabled   Boolean        @default(true)
   apiAccessEnabled         Boolean        @default(false)
   dedicatedSupportEnabled  Boolean        @default(false)

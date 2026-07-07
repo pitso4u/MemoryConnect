@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { formatMemorial } from '../lib/utils';
 import { tributeSchema } from '@memorialconnect/shared';
+import { brandFromFuneralHome } from '@memorialconnect/shared';
 import { isZodError } from '../lib/validation';
 import { env } from '../lib/env';
 import { isPubliclyViewable, MEMORIAL_STATUS } from '../lib/publishing';
@@ -51,7 +52,8 @@ const DEMO_MEMORIAL = {
   ],
   funeralHome: {
     name: 'Ubuntu Funeral Care', phone: '011 555 0123', email: 'care@example.co.za', address: 'Johannesburg, Gauteng',
-    logoUrl: null, primaryColor: '#c9a84c', secondaryColor: '#1a1a2e', websiteUrl: null, facebookUrl: null,
+    logoUrl: null, primaryColor: '#c9a84c', secondaryColor: '#1a1a2e', accentColor: '#dfc06e', backgroundColor: '#1a1a2e', textColor: '#f5f0e8', websiteUrl: null, facebookUrl: null,
+    brand: brandFromFuneralHome({ name: 'Ubuntu Funeral Care', phone: '011 555 0123', email: 'care@example.co.za', address: 'Johannesburg, Gauteng', primaryColor: '#c9a84c', secondaryColor: '#1a1a2e', accentColor: '#dfc06e', backgroundColor: '#1a1a2e', textColor: '#f5f0e8' }),
   },
   createdAt: '2026-06-20T10:00:00.000Z',
   updatedAt: '2026-06-27T10:00:00.000Z',
@@ -89,8 +91,14 @@ router.get('/memorials/:slug', async (req, res) => {
         locations: { orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
         funeralHome: {
           select: {
-            name: true, phone: true, email: true, address: true, logoUrl: true,
-            primaryColor: true, secondaryColor: true, websiteUrl: true, facebookUrl: true,
+            name: true, tradingName: true, phone: true, email: true, address: true, logoUrl: true, iconUrl: true,
+            primaryColor: true, secondaryColor: true, accentColor: true, backgroundColor: true, textColor: true,
+            fontFamily: true, buttonStyle: true, cardStyle: true, borderRadius: true, whatsapp: true,
+            websiteUrl: true, facebookUrl: true, instagramUrl: true, tiktokUrl: true, footerText: true,
+            copyrightText: true, whiteLabelEnabled: true, themeTemplate: true, homeBackgroundUrl: true,
+            loginBackgroundUrl: true, memorialHeroUrl: true, projectorBackgroundUrl: true, pdfWatermarkUrl: true,
+            splashScreenUrl: true, memorialStyle: true, animationLevel: true, galleryLayout: true,
+            timelineStyle: true, programmeStyle: true,
           },
         },
       },
@@ -128,7 +136,7 @@ router.get('/memorials/:slug', async (req, res) => {
         photos: memorial.photos,
         tributes: memorial.tributes,
         locations: memorial.locations,
-        funeralHome: memorial.funeralHome,
+        funeralHome: { ...memorial.funeralHome, brand: brandFromFuneralHome(memorial.funeralHome) },
         isPreview,
       },
     });
@@ -151,12 +159,14 @@ router.get('/memorials/:slug/projector', async (req, res) => {
         nextItem: DEMO_PROGRAMME[DEMO_MEMORIAL.currentProgrammeIndex + 1],
         announcements: DEMO_MEMORIAL.announcements,
         photos: DEMO_MEMORIAL.photos,
+        funeralHome: DEMO_MEMORIAL.funeralHome,
       },
     });
   }
   const memorial = await prisma.memorial.findFirst({
     where: { slug, deletedAt: null },
     include: {
+      funeralHome: true,
       photos: {
         where: { deletedAt: null, mediaType: 'PHOTO' },
         orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
@@ -178,6 +188,7 @@ router.get('/memorials/:slug/projector', async (req, res) => {
       nextItem: programme[memorial.currentProgrammeIndex + 1] || null,
       announcements: (memorial.announcements as unknown[]).filter((item) => (item as Record<string, unknown>).active),
       photos: memorial.photos,
+      funeralHome: { ...memorial.funeralHome, brand: brandFromFuneralHome(memorial.funeralHome) },
     },
   });
 });

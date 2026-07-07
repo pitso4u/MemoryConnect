@@ -37,7 +37,7 @@ export default function CreateMemorialPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5 rounded-xl border border-parchment-dark bg-white p-4 sm:p-6">
+      <form onSubmit={handleSubmit} className="brand-card space-y-5 p-4 sm:p-6">
         <div>
           <label className="block text-sm font-medium text-ink mb-1.5">
             Full Name of Deceased *
@@ -73,7 +73,7 @@ export default function CreateMemorialPage() {
         <button
           type="submit"
           disabled={loading}
-          className="px-6 py-2.5 bg-ink text-parchment rounded-lg font-medium hover:bg-ink-light transition disabled:opacity-50"
+          className="brand-button px-6 py-2.5 font-medium transition disabled:opacity-50"
         >
           {loading ? 'Creating...' : 'Create & Continue'}
         </button>

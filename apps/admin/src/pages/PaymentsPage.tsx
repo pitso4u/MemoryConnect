@@ -32,7 +32,7 @@ export default function PaymentsPage() {
         <h1 className="mt-3 font-display text-4xl text-ink">Publishing payments</h1>
         <p className="mt-2 max-w-2xl text-muted">Drafts are free. Pay only when a funeral is ready to become public.</p>
 
-        <section className="mt-8 overflow-hidden rounded-3xl bg-ink text-parchment shadow-xl">
+        <section className="mt-8 overflow-hidden bg-[var(--brand-primary)] text-[var(--brand-secondary)] shadow-xl" style={{ borderRadius: 'calc(var(--brand-radius) * 1.5)' }}>
           <div className="grid gap-8 p-7 sm:grid-cols-[1fr_auto] sm:items-center sm:p-9">
             <div>
               <p className="text-sm font-semibold text-gold-light">Publish each funeral for R299.99</p>
@@ -47,7 +47,7 @@ export default function PaymentsPage() {
           </div>
         </section>
 
-        <section className="mt-8 overflow-hidden rounded-2xl border border-gold/25 bg-[#fbf7ef]">
+        <section className="brand-card mt-8 overflow-hidden">
           <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[auto_1fr]">
             <div className="grid h-12 w-12 place-items-center rounded-full bg-gold/15 text-gold-dark">
               <MessageCircleHeart size={23} aria-hidden="true" />
@@ -62,7 +62,7 @@ export default function PaymentsPage() {
                 <button
                   type="button"
                   onClick={copyFamilyExplanation}
-                  className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-gold hover:text-gold-dark xl:w-auto"
+                  className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-full border border-ink/15 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-[var(--brand-accent)] hover:text-[var(--brand-primary)] xl:w-auto"
                 >
                   {copied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
                   {copied ? 'Copied' : 'Copy wording'}

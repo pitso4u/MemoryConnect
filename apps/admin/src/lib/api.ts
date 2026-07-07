@@ -10,6 +10,8 @@ import type {
   UpdateMemorialLocationInput,
   MemorialAnalytics,
   PublishPayment,
+  BrandProfile,
+  FuneralHome,
 } from '@memorialconnect/shared';
 
 const API_URL = getApiUrl();
@@ -188,6 +190,7 @@ interface MemorialDetail extends Memorial {
   photos: Photo[];
   tributes: Tribute[];
   locations: MemorialLocation[];
+  funeralHome?: FuneralHome & { brand?: BrandProfile };
 }
 
 interface MemorialPhoto {
@@ -245,10 +248,38 @@ export interface FuneralHomeProfile {
   phone?: string | null;
   address?: string | null;
   logoUrl?: string | null;
+  iconUrl?: string | null;
+  tradingName?: string | null;
   primaryColor?: string | null;
   secondaryColor?: string | null;
+  accentColor?: string | null;
+  backgroundColor?: string | null;
+  textColor?: string | null;
+  fontFamily?: string | null;
+  buttonStyle?: string | null;
+  cardStyle?: string | null;
+  borderRadius?: string | null;
+  whatsapp?: string | null;
   websiteUrl?: string | null;
   facebookUrl?: string | null;
+  instagramUrl?: string | null;
+  tiktokUrl?: string | null;
+  footerText?: string | null;
+  copyrightText?: string | null;
+  whiteLabelEnabled: boolean;
+  themeTemplate: string;
+  homeBackgroundUrl?: string | null;
+  loginBackgroundUrl?: string | null;
+  memorialHeroUrl?: string | null;
+  projectorBackgroundUrl?: string | null;
+  pdfWatermarkUrl?: string | null;
+  splashScreenUrl?: string | null;
+  memorialStyle: string;
+  animationLevel: string;
+  galleryLayout: string;
+  timelineStyle: string;
+  programmeStyle: string;
+  brand: BrandProfile;
   analyticsAccessEnabled: boolean;
   apiAccessEnabled: boolean;
   dedicatedSupportEnabled: boolean;
@@ -274,4 +305,6 @@ export type {
   UpdateMemorialLocationInput,
   MemorialAnalytics,
   PublishPayment,
+  BrandProfile,
+  FuneralHome,
 };

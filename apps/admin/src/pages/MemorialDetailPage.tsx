@@ -11,6 +11,7 @@ import { TributeViewer } from '../components/memorial/TributeViewer';
 import { LocationManager } from '../components/memorial/LocationManager';
 import { BarChart3, Copy, Eye, FileText, Image, Lock, MapPinned, MessageSquare, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useBrand } from '../context/BrandContext';
 
 type DetailTab = 'programme' | 'obituary' | 'photos' | 'locations' | 'tributes';
 
@@ -24,6 +25,7 @@ function canManageFamilyInvites(role?: string) {
 
 export default function MemorialDetailPage({ initialTab = 'programme' }: { initialTab?: DetailTab }) {
   const { user } = useAuth();
+  const { setPreviewBrand } = useBrand();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [memorial, setMemorial] = useState<MemorialDetail | null>(null);
@@ -60,6 +62,10 @@ export default function MemorialDetailPage({ initialTab = 'programme' }: { initi
   };
 
   useEffect(load, [id]);
+
+  useEffect(() => {
+    if (memorial?.funeralHome?.brand) setPreviewBrand(memorial.funeralHome.brand);
+  }, [memorial?.id, memorial?.funeralHome?.brand]);
 
   useEffect(() => setActiveTab(initialTab), [initialTab]);
 

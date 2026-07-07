@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { BrandProvider } from './context/BrandContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import DashboardLayout from './components/DashboardLayout';
 import LoginPage from './pages/LoginPage';
@@ -81,7 +82,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <AppRoutes />
+        <BrandProvider>
+          <AppRoutes />
+        </BrandProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

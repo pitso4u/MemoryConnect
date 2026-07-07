@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, photoUrl, ProjectorData } from '../lib/api';
+import { brandCssVariables, brandFromFuneralHome } from '../lib/brand';
 
 export const SLIDESHOW_INTERVAL_MS = 8000;
 export const IMAGE_LOAD_TIMEOUT_MS = 7000;
@@ -146,6 +147,9 @@ export default function ProjectorPage() {
   const currentPhoto = displayedPhotoIndex === null ? null : data.photos[displayedPhotoIndex];
   const currentPhotoUrl = currentPhoto ? photoUrl(currentPhoto.url) : '';
   const currentPhotoFailed = currentPhoto ? imageStates.current.get(currentPhotoUrl) === 'failed' : false;
+  const brand = data.funeralHome?.brand || brandFromFuneralHome(data.funeralHome || { name: 'Memory Connect' });
+  const projectorBackground = brand.projectorBackgroundUrl ? photoUrl(brand.projectorBackgroundUrl) : currentPhotoUrl;
+  const brandVars = brandCssVariables(brand) as React.CSSProperties;
 
   const markDisplayedPhotoFailed = () => {
     if (!currentPhotoUrl || imageStates.current.get(currentPhotoUrl) === 'failed') return;
@@ -155,7 +159,8 @@ export default function ProjectorPage() {
 
   if (photoCount === 0) {
     return (
-      <div className="flex min-h-screen select-none flex-col bg-black p-8 text-white sm:p-12">
+      <div className="flex min-h-screen select-none flex-col bg-[var(--brand-primary)] p-8 text-[var(--brand-secondary)] sm:p-12" style={brandVars}>
+        {brand.logoUrl && <img src={photoUrl(brand.logoUrl)} alt={`${brand.companyName} logo`} className="mb-6 max-h-16 max-w-56 object-contain" />}
         <Announcement message={data.announcements[0]?.message} />
         <ProgrammeFocus data={data} />
         <ProgrammeProgress data={data} progress={progress} />
@@ -164,10 +169,10 @@ export default function ProjectorPage() {
   }
 
   return (
-    <main className="relative min-h-screen select-none overflow-hidden bg-[#08080d] text-white">
+    <main className="relative min-h-screen select-none overflow-hidden bg-[var(--brand-primary)] text-[var(--brand-secondary)]" style={brandVars}>
       <div
         className="absolute inset-0 scale-110 bg-cover bg-center opacity-30 blur-3xl transition-[background-image] duration-1000"
-        style={{ backgroundImage: currentPhoto && !currentPhotoFailed ? `url(${currentPhotoUrl})` : undefined }}
+        style={{ backgroundImage: projectorBackground && !currentPhotoFailed ? `url(${projectorBackground})` : undefined }}
         aria-hidden="true"
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_42%,transparent_0%,rgba(0,0,0,0.18)_48%,rgba(0,0,0,0.72)_100%)]" />
@@ -196,7 +201,7 @@ export default function ProjectorPage() {
 
           <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/70 to-transparent lg:hidden" />
           <div className="absolute left-5 top-5 rounded-full border border-white/15 bg-black/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/75 backdrop-blur-md sm:left-8 sm:top-8">
-            In loving memory
+            {brand.tradingName || brand.companyName}
           </div>
           <div className="absolute bottom-5 right-5 rounded-full bg-black/40 px-3 py-1.5 text-xs tabular-nums text-white/70 backdrop-blur-md sm:bottom-8 sm:right-8">
             {(displayedPhotoIndex ?? photoIndex) + 1} / {photoCount}

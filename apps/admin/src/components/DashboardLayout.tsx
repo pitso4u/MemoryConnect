@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useBrand } from '../context/BrandContext';
 import { Building2, CreditCard, LayoutDashboard, LogOut, Menu, Plus, X } from 'lucide-react';
 
 const funeralHomeNavigation = [
@@ -22,6 +23,7 @@ function isFamilyRole(role?: string) {
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
+  const { brand } = useBrand();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -57,10 +59,10 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen md:flex">
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-white/10 bg-ink px-4 text-parchment shadow-sm md:hidden">
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-white/10 bg-[var(--brand-primary)] px-4 text-[var(--brand-secondary)] shadow-sm md:hidden">
         <div className="min-w-0">
-          <p className="truncate font-display text-lg leading-tight">Memory Connect</p>
-          <p className="text-[11px] text-parchment/50">{portalLabel}</p>
+          <p className="truncate font-display text-lg leading-tight">{brand.tradingName || brand.companyName}</p>
+          <p className="text-[11px] opacity-60">{portalLabel}</p>
         </div>
         <button
           type="button"
@@ -75,7 +77,7 @@ export default function DashboardLayout() {
       </header>
 
       {menuOpen && (
-        <div id="mobile-admin-menu" className="fixed inset-x-0 bottom-0 top-16 z-30 bg-ink text-parchment md:hidden">
+        <div id="mobile-admin-menu" className="fixed inset-x-0 bottom-0 top-16 z-30 bg-[var(--brand-primary)] text-[var(--brand-secondary)] md:hidden">
           <div className="flex h-full flex-col overflow-y-auto pb-[env(safe-area-inset-bottom)]">
             {navItems(true)}
             <div className="mt-auto border-t border-white/10 p-4">
@@ -89,10 +91,12 @@ export default function DashboardLayout() {
         </div>
       )}
 
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-ink text-parchment md:flex">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-[var(--brand-primary)] text-[var(--brand-secondary)] md:flex">
         <div className="border-b border-white/10 p-6">
-          <h1 className="font-display text-xl">Memory Connect</h1>
+          {brand.logoUrl ? <img src={brand.logoUrl} alt={`${brand.companyName} logo`} className="mb-3 max-h-12 max-w-44 object-contain" /> : null}
+          <h1 className="font-display text-xl">{brand.tradingName || brand.companyName}</h1>
           <p className="mt-1 text-xs text-parchment/50">{portalLabel}</p>
+          {!brand.whiteLabelEnabled && <p className="mt-1 text-[11px] text-parchment/35">Powered by Memory Connect</p>}
         </div>
         {navItems()}
         <div className="border-t border-white/10 p-4">

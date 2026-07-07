@@ -17,6 +17,7 @@ import {
 } from '../lib/publishing';
 import { permanentlyDeleteMemorial } from '../lib/retention';
 import { isZodError } from '../lib/validation';
+import { brandFromFuneralHome } from '@memorialconnect/shared';
 
 const router = Router();
 
@@ -73,10 +74,13 @@ router.get('/', authenticate, async (req, res) => {
     if (isFamilyRole(req.user!.role)) {
       const access = await prisma.memorialAccess.findMany({
         where: { userId: req.user!.userId, memorial: { status: { not: MEMORIAL_STATUS.DELETED } } },
-        include: { memorial: true },
+        include: { memorial: { include: { funeralHome: true } } },
         orderBy: { createdAt: 'desc' },
       });
-      return res.json({ success: true, data: access.map((item) => formatMemorial(item.memorial as unknown as Record<string, unknown>)) });
+      return res.json({ success: true, data: access.map((item) => ({
+        ...formatMemorial(item.memorial as unknown as Record<string, unknown>),
+        funeralHome: { ...item.memorial.funeralHome, brand: brandFromFuneralHome(item.memorial.funeralHome) },
+      })) });
     }
     if (!req.user!.funeralHomeId || !isFuneralHomeRole(req.user!.role)) {
       return res.status(403).json({ success: false, error: 'Funeral home access required' });
@@ -279,10 +283,20 @@ router.get('/:id', authenticate, async (req, res) => {
         photos: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
         tributes: { orderBy: { createdAt: 'desc' } },
         locations: { orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
+        funeralHome: true,
       },
     });
     if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
-    res.json({ success: true, data: { ...formatMemorial(memorial as unknown as Record<string, unknown>), photos: memorial.photos, tributes: memorial.tributes, locations: memorial.locations } });
+    res.json({
+      success: true,
+      data: {
+        ...formatMemorial(memorial as unknown as Record<string, unknown>),
+        photos: memorial.photos,
+        tributes: memorial.tributes,
+        locations: memorial.locations,
+        funeralHome: { ...memorial.funeralHome, brand: brandFromFuneralHome(memorial.funeralHome) },
+      },
+    });
   } catch (error) {
     console.error('Get memorial error:', error);
     res.status(500).json({ success: false, error: 'Failed to load memorial' });
