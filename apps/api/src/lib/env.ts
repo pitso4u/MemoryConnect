@@ -32,6 +32,8 @@ const envSchema = z.object({
   ADMIN_URL: z.string().optional(),
   MEMORIAL_URL: z.string().optional(),
   PAYSTACK_SECRET_KEY: z.string().optional(),
+  AUTH_RATE_LIMIT_WINDOW_MS: z.string().transform(Number).pipe(z.number().int().positive()).default('900000'),
+  AUTH_RATE_LIMIT_MAX: z.string().transform(Number).pipe(z.number().int().positive()).optional(),
   MEMORIAL_EDIT_LOCK_HOURS: z.string().transform(Number).pipe(z.number().int().positive()).default('72'),
 });
 
