@@ -22,7 +22,16 @@ app.use('/api/v1/public', publicRoutes);
 
 async function home(label: string) {
   const funeralHome = await prisma.funeralHome.create({ data: { name: label, email: `${label}-${Date.now()}@example.com` } });
-  const token = signToken({ userId: `user-${label}`, funeralHomeId: funeralHome.id, role: 'admin' });
+  const user = await prisma.user.create({
+    data: {
+      name: `${label} Admin`,
+      email: `${label}-admin-${Date.now()}@example.com`,
+      passwordHash: 'test-password-hash',
+      role: 'admin',
+      funeralHomeId: funeralHome.id,
+    },
+  });
+  const token = signToken({ userId: user.id, funeralHomeId: funeralHome.id, role: 'admin' });
   return { funeralHome, token };
 }
 
@@ -174,13 +183,25 @@ describe('pay-per-funeral lifecycle', () => {
     await prisma.funeralHome.delete({ where: { id: funeralHome.id } });
   });
 
-  it('shows the deceased photo publicly, increments analytics, and blocks expired viewing', async () => {
+  it('shows the deceased photo publicly, records unique analytics, and blocks expired viewing', async () => {
     const { funeralHome, token } = await home('views');
     const memorial = await draft(funeralHome.id, 'View Test');
     await prisma.memorial.update({ where: { id: memorial.id }, data: { status: MEMORIAL_STATUS.PUBLISHED, deceasedPhotoUrl: '/uploads/photo.jpg', publicExpiresAt: addHours(new Date(), 24) } });
     const publicView = await request(app).get(`/api/v1/public/memorials/${memorial.slug}`);
     expect(publicView.status).toBe(200);
     expect(publicView.body.data.deceasedPhotoUrl).toBe('/uploads/photo.jpg');
+    expect((await prisma.memorial.findUniqueOrThrow({ where: { id: memorial.id } })).viewCount).toBe(0);
+    const view = await request(app)
+      .post(`/api/v1/public/memorials/${memorial.slug}/view`)
+      .set('User-Agent', 'Mozilla/5.0 MemorialConnect Test Browser')
+      .send({ visitorId: 'visitor-one-12345' });
+    expect(view.status).toBe(200);
+    expect(view.body.data.counted).toBe(true);
+    const duplicateView = await request(app)
+      .post(`/api/v1/public/memorials/${memorial.slug}/view`)
+      .set('User-Agent', 'Mozilla/5.0 MemorialConnect Test Browser')
+      .send({ visitorId: 'visitor-one-12345' });
+    expect(duplicateView.body.data.counted).toBe(false);
     expect((await prisma.memorial.findUniqueOrThrow({ where: { id: memorial.id } })).viewCount).toBe(1);
     const analytics = await request(app).get(`/api/v1/memorials/${memorial.id}/analytics`).set('Authorization', `Bearer ${token}`);
     expect(analytics.body.data.totalViews).toBe(1);

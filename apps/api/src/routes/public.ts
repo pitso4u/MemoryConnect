@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { formatMemorial } from '../lib/utils';
 import { tributeSchema } from '@memorialconnect/shared';
@@ -8,6 +9,7 @@ import { isZodError } from '../lib/validation';
 import { env } from '../lib/env';
 import { isPubliclyViewable, MEMORIAL_STATUS } from '../lib/publishing';
 import { verifyPreviewToken } from '../middleware/auth';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -67,17 +69,23 @@ function expired(res: any) {
   return res.status(410).json({ success: false, code: 'MEMORIAL_EXPIRED', message: 'This memorial viewing period has ended.' });
 }
 
-function deviceType(userAgent?: string) {
-  if (!userAgent) return null;
-  if (/tablet|ipad/i.test(userAgent)) return 'tablet';
-  if (/mobile|android|iphone/i.test(userAgent)) return 'mobile';
-  return 'desktop';
+function dateBucket(now = new Date()) {
+  return now.toISOString().slice(0, 10);
 }
 
-function ipHash(ip?: string) {
-  if (!ip) return null;
-  return crypto.createHash('sha256').update(`${env.JWT_SECRET}:${ip}`).digest('hex');
+function isLikelyBot(userAgent?: string | null) {
+  if (!userAgent) return true;
+  return /bot|crawler|spider|preview|facebookexternalhit|whatsapp|slackbot|telegrambot|headless|serviceworker/i.test(userAgent);
 }
+
+function visitorHash(visitorId: string | undefined, ip: string | undefined, userAgent: string | undefined) {
+  const seed = [visitorId || 'no-visitor-id', ip || 'no-ip', userAgent || 'no-user-agent'].join('|');
+  return crypto.createHash('sha256').update(`${env.JWT_SECRET}:${seed}`).digest('hex');
+}
+
+const viewSchema = z.object({
+  visitorId: z.string().trim().min(12).max(200).optional(),
+});
 
 router.get('/memorials/:slug', async (req, res) => {
   try {
@@ -112,27 +120,10 @@ router.get('/memorials/:slug', async (req, res) => {
     );
     if (!isPreview && !isPubliclyViewable(memorial)) return expired(res);
 
-    if (!isPreview) {
-      const userAgent = req.get('user-agent')?.slice(0, 500) || null;
-      await prisma.$transaction([
-        prisma.memorialView.create({
-          data: {
-            memorialId: memorial.id,
-            ipHash: ipHash(req.ip),
-            userAgent,
-            referrer: req.get('referer')?.slice(0, 1000) || null,
-            country: req.get('cf-ipcountry')?.slice(0, 2) || null,
-            deviceType: deviceType(userAgent || undefined),
-          },
-        }),
-        prisma.memorial.update({ where: { id: memorial.id }, data: { viewCount: { increment: 1 } } }),
-      ]);
-    }
-
     res.json({
       success: true,
       data: {
-        ...formatMemorial({ ...memorial, viewCount: memorial.viewCount + (isPreview ? 0 : 1) } as unknown as Record<string, unknown>),
+        ...formatMemorial(memorial as unknown as Record<string, unknown>),
         photos: memorial.photos,
         tributes: memorial.tributes,
         locations: memorial.locations,
@@ -143,6 +134,57 @@ router.get('/memorials/:slug', async (req, res) => {
   } catch (error) {
     console.error('Get public memorial error:', error);
     res.status(500).json({ success: false, message: 'Failed to load memorial' });
+  }
+});
+
+router.post('/memorials/:slug/view', async (req, res) => {
+  try {
+    const slug = queryValue(req.params.slug);
+    if (slug === 'demo') return res.json({ success: true, data: { counted: false, viewCount: 0 } });
+    if (req.get('x-memoryconnect-preview')?.toLowerCase() === 'true') {
+      return res.json({ success: true, data: { counted: false } });
+    }
+
+    const body = viewSchema.parse(req.body || {});
+    const memorial = await prisma.memorial.findFirst({ where: { slug, deletedAt: null } });
+    if (!memorial) return res.status(404).json({ success: false, message: 'Memorial not found' });
+    if (!isPubliclyViewable(memorial)) return expired(res);
+
+    const userAgent = req.get('user-agent')?.slice(0, 500) || null;
+    if (isLikelyBot(userAgent)) {
+      return res.json({ success: true, data: { counted: false, viewCount: memorial.viewCount } });
+    }
+
+    const hash = visitorHash(body.visitorId, req.ip, userAgent || undefined);
+    const bucket = dateBucket();
+    let counted = false;
+    const updated = await prisma.$transaction(async (tx) => {
+      try {
+        await tx.memorialView.create({
+          data: {
+            memorialId: memorial.id,
+            visitorHash: hash,
+            dateBucket: bucket,
+            userAgent,
+            referrer: req.get('referer')?.slice(0, 1000) || null,
+          },
+        });
+        counted = true;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          counted = false;
+          return memorial;
+        }
+        throw error;
+      }
+      return tx.memorial.update({ where: { id: memorial.id }, data: { viewCount: { increment: 1 } } });
+    });
+
+    res.json({ success: true, data: { counted, viewCount: updated.viewCount } });
+  } catch (error) {
+    if (isZodError(error)) return res.status(400).json({ success: false, message: error.errors[0].message });
+    console.error('Record public memorial view error:', error);
+    res.status(500).json({ success: false, message: 'Failed to record memorial view' });
   }
 });
 

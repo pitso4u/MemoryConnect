@@ -24,6 +24,16 @@ const locationTypeLabels = {
   OTHER: 'Other location',
 } as const;
 
+const VISITOR_ID_KEY = 'memory_connect_visitor_id';
+
+function getVisitorId() {
+  const existing = window.localStorage.getItem(VISITOR_ID_KEY);
+  if (existing) return existing;
+  const id = crypto.randomUUID();
+  window.localStorage.setItem(VISITOR_ID_KEY, id);
+  return id;
+}
+
 export function getDirectionsUrl(latitude: number, longitude: number): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
 }
@@ -72,6 +82,20 @@ export default function MemorialPage() {
       window.clearInterval(interval);
     };
   }, [slug, previewToken]);
+
+  useEffect(() => {
+    if (!slug || previewToken || memorial?.isPreview) return;
+    try {
+      void api.recordMemorialView(slug, getVisitorId()).then((result) => {
+        const viewCount = result.viewCount;
+        if (typeof viewCount === 'number') {
+          setMemorial((current) => current ? { ...current, viewCount } : current);
+        }
+      });
+    } catch {
+      // View counting must never block the memorial experience.
+    }
+  }, [slug, previewToken, memorial?.id, memorial?.isPreview]);
 
   if (loading) {
     return (

@@ -4,7 +4,7 @@ import {
   updateMemorialLocationSchema,
 } from '@memorialconnect/shared';
 import { prisma } from '../lib/prisma';
-import { authenticate, canAccessMemorial, isFamilyRole, normalizeRole, ROLES } from '../middleware/auth';
+import { authenticate, canAccessMemorial, isFamilyRole } from '../middleware/auth';
 import { isZodError } from '../lib/validation';
 import { isEditLocked } from '../lib/publishing';
 
@@ -37,9 +37,6 @@ router.post('/', authenticate, async (req, res) => {
   try {
     const memorial = await ownedMemorial(req);
     if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
-    if (normalizeRole(req.user!.role) === ROLES.FAMILY_CONTRIBUTOR) {
-      return res.status(403).json({ success: false, error: 'Family contributors can suggest edits but cannot add locations' });
-    }
     if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return res.status(423).json({ success: false, error: 'This funeral programme is locked because it has already been published and shared.' });
     const memorialId = memorial.id;
 

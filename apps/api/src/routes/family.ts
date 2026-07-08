@@ -36,6 +36,36 @@ function tokenHash(token: string) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+function adminBaseUrl() {
+  return (env.ADMIN_URL || 'https://admin.memoryconnect.co.za').replace(/\/$/, '');
+}
+
+function inviteUrl(token?: string | null) {
+  return token ? `${adminBaseUrl()}/family/invite/${token}` : null;
+}
+
+function resetUrl(token: string) {
+  return `${adminBaseUrl()}/reset-password/${token}`;
+}
+
+function invitationStatus(invitation: { acceptedAt?: Date | null; expiresAt: Date }) {
+  if (invitation.acceptedAt) return 'Accepted';
+  if (invitation.expiresAt <= new Date()) return 'Expired';
+  return 'Pending';
+}
+
+async function createPasswordReset(userId: string) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  await prisma.passwordResetToken.create({
+    data: {
+      userId,
+      tokenHash: tokenHash(token),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    },
+  });
+  return token;
+}
+
 async function audit(memorialId: string, userId: string | null, action: string, details?: Record<string, unknown>) {
   await prisma.memorialAuditLog.create({
     data: { memorialId, userId, action, details: details as Prisma.InputJsonValue | undefined },
@@ -68,6 +98,7 @@ router.post('/memorials/:id/invitations', authenticate, async (req, res) => {
         phone: body.phone || null,
         role: body.role,
         tokenHash: tokenHash(token),
+        token,
         expiresAt,
       },
     });
@@ -79,12 +110,12 @@ router.post('/memorials/:id/invitations', authenticate, async (req, res) => {
       phone: body.phone || null,
     });
 
-    const baseUrl = (env.ADMIN_URL || 'http://localhost:5173').replace(/\/$/, '');
     res.status(201).json({
       success: true,
       data: {
         ...invitation,
-        inviteUrl: `${baseUrl}/family/invite/${token}`,
+        status: invitationStatus(invitation),
+        inviteUrl: inviteUrl(token),
       },
     });
   } catch (error) {
@@ -138,6 +169,8 @@ router.post('/invite/:token/accept', async (req, res) => {
           email,
           name: body.name || invitation.name,
           passwordHash: await bcrypt.hash(body.password, 12),
+          passwordSetAt: new Date(),
+          lastLoginAt: new Date(),
           role: invitation.role,
           funeralHomeId: null,
         },
@@ -171,6 +204,7 @@ router.post('/invite/:token/accept', async (req, res) => {
       }),
     ]);
 
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     const accessToken = signToken({ userId: user.id, funeralHomeId: user.funeralHomeId, role: user.role });
     res.json({
       success: true,
@@ -186,6 +220,119 @@ router.post('/invite/:token/accept', async (req, res) => {
   }
 });
 
+router.get('/memorials/:id/invitations', authenticate, async (req, res) => {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Only funeral home admins can manage family invitations' });
+  }
+  const memorialId = param(req, 'id');
+  const memorial = await prisma.memorial.findFirst({ where: { id: memorialId, funeralHomeId: req.user!.funeralHomeId } });
+  if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+
+  const invitations = await prisma.familyInvitation.findMany({
+    where: { memorialId },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const emails = invitations.map((item) => item.email).filter((email): email is string => Boolean(email));
+  const users = emails.length
+    ? await prisma.user.findMany({
+        where: { email: { in: emails } },
+        select: { id: true, email: true, passwordSetAt: true, lastLoginAt: true, createdAt: true },
+      })
+    : [];
+  const usersByEmail = new Map(users.map((user) => [user.email, user]));
+
+  res.json({
+    success: true,
+    data: invitations.map((invitation) => {
+      const account = invitation.email ? usersByEmail.get(invitation.email) : null;
+      return {
+        id: invitation.id,
+        memorialId: invitation.memorialId,
+        name: invitation.name,
+        email: invitation.email,
+        phone: invitation.phone,
+        role: invitation.role,
+        expiresAt: invitation.expiresAt,
+        acceptedAt: invitation.acceptedAt,
+        createdAt: invitation.createdAt,
+        status: invitationStatus(invitation),
+        inviteUrl: inviteUrl(invitation.token),
+        accountStatus: invitation.acceptedAt ? (account ? 'Account created' : 'Invitation accepted') : 'Invitation pending',
+        passwordSet: Boolean(account?.passwordSetAt),
+        lastLoginAt: account?.lastLoginAt || null,
+        userId: account?.id || null,
+      };
+    }),
+  });
+});
+
+router.post('/memorials/:id/invitations/:invitationId/resend', authenticate, async (req, res) => {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Only funeral home admins can resend invitations' });
+  }
+  const memorialId = param(req, 'id');
+  const invitationId = param(req, 'invitationId');
+  const invitation = await prisma.familyInvitation.findFirst({
+    where: { id: invitationId, memorialId, funeralHomeId: req.user!.funeralHomeId },
+  });
+  if (!invitation) return res.status(404).json({ success: false, error: 'Invitation not found' });
+  const token = invitation.token || crypto.randomBytes(32).toString('base64url');
+  const updated = await prisma.familyInvitation.update({
+    where: { id: invitation.id },
+    data: {
+      token,
+      tokenHash: tokenHash(token),
+      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      acceptedAt: null,
+    },
+  });
+  await audit(memorialId, req.user!.userId, 'family_invite_resent', { invitationId });
+  res.json({ success: true, data: { ...updated, status: invitationStatus(updated), inviteUrl: inviteUrl(token) } });
+});
+
+router.delete('/memorials/:id/invitations/:invitationId', authenticate, async (req, res) => {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Only funeral home admins can revoke invitations' });
+  }
+  const memorialId = param(req, 'id');
+  const invitationId = param(req, 'invitationId');
+  const invitation = await prisma.familyInvitation.findFirst({
+    where: { id: invitationId, memorialId, funeralHomeId: req.user!.funeralHomeId },
+  });
+  if (!invitation) return res.status(404).json({ success: false, error: 'Invitation not found' });
+  await prisma.$transaction([
+    prisma.familyInvitation.delete({ where: { id: invitation.id } }),
+    prisma.memorialAuditLog.create({
+      data: { memorialId, userId: req.user!.userId, action: 'family_invite_revoked', details: { invitationId, role: invitation.role } },
+    }),
+  ]);
+  res.json({ success: true, data: null });
+});
+
+router.post('/memorials/:id/access/:accessId/password-reset', authenticate, async (req, res) => {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Only funeral home admins can send password reset links' });
+  }
+  const memorialId = param(req, 'id');
+  const accessId = param(req, 'accessId');
+  const access = await prisma.memorialAccess.findFirst({
+    where: { id: accessId, memorialId, memorial: { funeralHomeId: req.user!.funeralHomeId } },
+    include: { user: { select: { id: true, email: true } } },
+  });
+  if (!access) return res.status(404).json({ success: false, error: 'Family access not found' });
+  const token = await createPasswordReset(access.userId);
+  await audit(memorialId, req.user!.userId, 'password_reset_created', { targetUserId: access.userId, email: access.user.email });
+  res.json({
+    success: true,
+    data: {
+      resetUrl: resetUrl(token),
+      sentByEmail: Boolean(access.user.email),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    },
+  });
+});
+
 router.get('/memorials/:id/access', authenticate, async (req, res) => {
   if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
     return res.status(403).json({ success: false, error: 'Only funeral home admins can manage family access' });
@@ -196,7 +343,7 @@ router.get('/memorials/:id/access', authenticate, async (req, res) => {
 
   const access = await prisma.memorialAccess.findMany({
     where: { memorialId },
-    include: { user: { select: { id: true, name: true, email: true } } },
+    include: { user: { select: { id: true, name: true, email: true, passwordSetAt: true, lastLoginAt: true, createdAt: true } } },
     orderBy: { createdAt: 'desc' },
   });
   res.json({ success: true, data: access });

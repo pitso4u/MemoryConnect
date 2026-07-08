@@ -142,8 +142,8 @@ router.get('/:id/analytics', authenticate, async (req, res) => {
     select: { id: true, deceasedName: true, viewCount: true },
   });
   const [viewsToday, viewsLast7Days] = await Promise.all([
-    prisma.memorialView.count({ where: { memorialId: memorial.id, viewedAt: { gte: today } } }),
-    prisma.memorialView.count({ where: { memorialId: memorial.id, viewedAt: { gte: sevenDaysAgo } } }),
+    prisma.memorialView.count({ where: { memorialId: memorial.id, createdAt: { gte: today } } }),
+    prisma.memorialView.count({ where: { memorialId: memorial.id, createdAt: { gte: sevenDaysAgo } } }),
   ]);
   const topViewedMemorials = [...homeMemorials]
     .sort((a, b) => b.viewCount - a.viewCount)
@@ -317,9 +317,9 @@ router.patch('/:id', authenticate, async (req, res) => {
     const { biography, programme, announcements, settings, ...rest } = body;
     const role = normalizeRole(req.user!.role);
     if (role === ROLES.FAMILY_CONTRIBUTOR) {
-      const allowed = ['obituary', 'biography'] as const;
+      const allowed = ['obituary', 'biography', 'programme'] as const;
       const attempted = Object.keys(body).filter((key) => !allowed.includes(key as typeof allowed[number]));
-      if (attempted.length) return res.status(403).json({ success: false, error: 'Family contributors can only suggest edits and add tribute content' });
+      if (attempted.length) return res.status(403).json({ success: false, error: 'Family contributors can only suggest obituary and programme content' });
     }
     if (isFamilyRole(role) && (announcements || settings || rest.deceasedName !== undefined || rest.serviceDate !== undefined || rest.serviceVenue !== undefined || rest.deceasedPhotoUrl !== undefined)) {
       return res.status(403).json({ success: false, error: 'Family users cannot edit funeral home controlled publishing details' });
@@ -383,10 +383,10 @@ router.delete('/:id', authenticate, async (req, res) => {
   if (![MEMORIAL_STATUS.DRAFT, MEMORIAL_STATUS.PAID_PENDING, MEMORIAL_STATUS.PUBLISHED].includes(memorial.status as any)) {
     return lockedResponse(res);
   }
-  const deleted = await permanentlyDeleteMemorial(memorial.id);
   await prisma.memorialAuditLog.create({
     data: { memorialId: memorial.id, userId: req.user!.userId, action: 'memorial_deleted', details: { status: memorial.status } },
   });
+  const deleted = await permanentlyDeleteMemorial(memorial.id);
   res.json({ success: true, data: deleted });
 });
 

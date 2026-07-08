@@ -85,7 +85,10 @@ model User {
   funeralHome   FuneralHome? @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
   memorialAccess MemorialAccess[]
   invitationsSent FamilyInvitation[] @relation("FamilyInvitationInviter")
+  passwordResetTokens PasswordResetToken[]
   auditLogs     MemorialAuditLog[]
+  passwordSetAt DateTime?
+  lastLoginAt   DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 }
@@ -150,6 +153,7 @@ model FamilyInvitation {
   phone           String?
   role            String
   tokenHash       String    @unique
+  token           String?
   expiresAt       DateTime
   acceptedAt      DateTime?
   createdAt       DateTime  @default(now())
@@ -158,6 +162,19 @@ model FamilyInvitation {
   @@index([funeralHomeId])
   @@index([email])
   @@index([phone])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model MemorialAccess {
@@ -289,18 +306,22 @@ model UsageLedger {
 }
 
 model MemorialView {
-  id         String   @id @default(cuid())
-  memorialId String
-  memorial   Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
-  viewedAt   DateTime @default(now())
-  ipHash     String?
-  userAgent  String?
-  referrer   String?
-  country    String?
-  deviceType String?
+  id          String   @id @default(cuid())
+  memorialId  String
+  memorial    Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  visitorHash String?
+  dateBucket  String?
+  userAgent   String?
+  referrer    String?
+  viewedAt    DateTime? @default(now())
+  ipHash      String?
+  country     String?
+  deviceType  String?
+  createdAt   DateTime @default(now())
 
-  @@index([memorialId, viewedAt])
-  @@index([viewedAt])
+  @@unique([memorialId, visitorHash, dateBucket])
+  @@index([memorialId, createdAt])
+  @@index([createdAt])
 }
 
 model MemorialLocation {

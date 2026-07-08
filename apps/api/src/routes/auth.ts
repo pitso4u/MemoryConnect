@@ -70,6 +70,7 @@ router.post('/register', async (req, res) => {
             name: body.name,
             email: body.email,
             passwordHash,
+            passwordSetAt: new Date(),
             role: ROLES.FUNERAL_HOME_ADMIN,
           },
         },
@@ -117,6 +118,7 @@ router.post('/login', async (req, res) => {
     if (!user || !(await bcrypt.compare(body.password, user.passwordHash))) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
     const token = signToken({
       userId: user.id,

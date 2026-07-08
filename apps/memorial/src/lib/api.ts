@@ -90,6 +90,11 @@ export type { ProgrammeItem, Photo, Tribute, Announcement, MemorialLocation, Bra
 
 export const api = {
   getMemorial: (slug: string, previewToken?: string) => request<PublicMemorial>(`/api/v1/public/memorials/${slug}${previewToken ? `?preview=${encodeURIComponent(previewToken)}` : ''}`),
+  recordMemorialView: (slug: string, visitorId: string) =>
+    request<{ counted: boolean; viewCount?: number }>(`/api/v1/public/memorials/${slug}/view`, {
+      method: 'POST',
+      body: JSON.stringify({ visitorId }),
+    }),
   getProjector: (slug: string, previewToken?: string) => request<ProjectorData>(`/api/v1/public/memorials/${slug}/projector${previewToken ? `?preview=${encodeURIComponent(previewToken)}` : ''}`),
   submitTribute: (slug: string, data: { authorName: string; message: string }) =>
     request<{ pending: boolean }>(`/api/v1/public/memorials/${slug}/tributes`, {

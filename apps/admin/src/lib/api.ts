@@ -103,11 +103,23 @@ export const api = {
   createFamilyInvitation: (memorialId: string, data: { name: string; email?: string; phone?: string; role: 'FAMILY_MANAGER' | 'FAMILY_CONTRIBUTOR' }) =>
     request<FamilyInvitation>(`/api/v1/family/memorials/${memorialId}/invitations`, { method: 'POST', body: JSON.stringify(data) }),
 
+  getFamilyInvitations: (memorialId: string) =>
+    request<FamilyInvitation[]>(`/api/v1/family/memorials/${memorialId}/invitations`),
+
+  resendFamilyInvitation: (memorialId: string, invitationId: string) =>
+    request<FamilyInvitation>(`/api/v1/family/memorials/${memorialId}/invitations/${invitationId}/resend`, { method: 'POST' }),
+
+  revokeFamilyInvitation: (memorialId: string, invitationId: string) =>
+    request<null>(`/api/v1/family/memorials/${memorialId}/invitations/${invitationId}`, { method: 'DELETE' }),
+
   getFamilyAccess: (memorialId: string) =>
     request<FamilyAccess[]>(`/api/v1/family/memorials/${memorialId}/access`),
 
   revokeFamilyAccess: (memorialId: string, accessId: string) =>
     request<null>(`/api/v1/family/memorials/${memorialId}/access/${accessId}`, { method: 'DELETE' }),
+
+  sendFamilyPasswordReset: (memorialId: string, accessId: string) =>
+    request<{ resetUrl: string; sentByEmail: boolean; expiresAt: string }>(`/api/v1/family/memorials/${memorialId}/access/${accessId}/password-reset`, { method: 'POST' }),
 
   getFamilyInvite: (token: string) =>
     request<FamilyInvitePreview>(`/api/v1/family/invite/${encodeURIComponent(token)}`),
@@ -218,7 +230,13 @@ export interface FamilyInvitation {
   role: 'FAMILY_MANAGER' | 'FAMILY_CONTRIBUTOR';
   expiresAt: string;
   acceptedAt?: string | null;
-  inviteUrl: string;
+  createdAt?: string;
+  status?: 'Pending' | 'Accepted' | 'Expired';
+  inviteUrl?: string | null;
+  accountStatus?: 'Invitation pending' | 'Invitation accepted' | 'Account created';
+  passwordSet?: boolean;
+  lastLoginAt?: string | null;
+  userId?: string | null;
 }
 
 export interface FamilyAccess {
@@ -227,7 +245,7 @@ export interface FamilyAccess {
   userId: string;
   role: 'FAMILY_MANAGER' | 'FAMILY_CONTRIBUTOR';
   createdAt: string;
-  user: { id: string; name: string; email: string };
+  user: { id: string; name: string; email: string; passwordSetAt?: string | null; lastLoginAt?: string | null; createdAt?: string };
 }
 
 export interface FamilyInvitePreview {
