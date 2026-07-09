@@ -195,6 +195,25 @@ export const api = {
     request<null>(`/api/v1/memorials/${memorialId}/locations/${locationId}`, { method: 'DELETE' }),
 
   getPayments: () => request<Array<PublishPayment & { memorial: { deceasedName: string } }>>('/api/v1/payments'),
+
+  getPlatformSummary: () => request<PlatformSummary>('/api/v1/platform/summary'),
+  getPlatformFuneralHomes: () => request<PlatformFuneralHome[]>('/api/v1/platform/funeral-homes'),
+  getPlatformFuneralHome: (id: string) => request<PlatformFuneralHomeDetail>(`/api/v1/platform/funeral-homes/${id}`),
+  getPlatformPayments: () => request<PlatformPayment[]>('/api/v1/platform/payments'),
+  getPlatformUsers: () => request<PlatformUser[]>('/api/v1/platform/users'),
+  getPlatformSupport: () => request<PlatformSupport>('/api/v1/platform/support'),
+  getPlatformAnalytics: () => request<PlatformAnalytics>('/api/v1/platform/analytics'),
+  getPlatformAuditLogs: () => request<PlatformAuditLog[]>('/api/v1/platform/audit-logs'),
+  suspendPlatformFuneralHome: (id: string) => request(`/api/v1/platform/funeral-homes/${id}/suspend`, { method: 'POST' }),
+  reactivatePlatformFuneralHome: (id: string) => request(`/api/v1/platform/funeral-homes/${id}/reactivate`, { method: 'POST' }),
+  sendPlatformPasswordReset: (id: string) =>
+    request<{ resetUrl: string; email: string; expiresAt: string }>(`/api/v1/platform/users/${id}/send-password-reset`, { method: 'POST' }),
+  resendPlatformInvite: (id: string) =>
+    request<FamilyInvitation>(`/api/v1/platform/invites/${id}/resend`, { method: 'POST' }),
+  verifyPlatformPayment: (id: string) =>
+    request<PlatformPayment>(`/api/v1/platform/payments/${id}/verify`, { method: 'POST', body: JSON.stringify({ confirmed: true }) }),
+  deletePlatformMemorial: (id: string) =>
+    request<null>(`/api/v1/platform/memorials/${id}`, { method: 'DELETE', body: JSON.stringify({ confirmed: true }) }),
 };
 
 interface MemorialDetail extends Memorial {
@@ -303,6 +322,89 @@ export interface FuneralHomeProfile {
   dedicatedSupportEnabled: boolean;
   branches: Array<{ id: string; name: string; address?: string | null }>;
   users: Array<{ id: string; name: string; email: string; role: string }>;
+}
+
+export interface PlatformSummary {
+  registrations: { total: number; today: number; month: number; pending: number; active: number; inactive: number };
+  users: { total: number; withoutPassword: number };
+  payments: { totalRevenueCents: number; todayRevenueCents: number; monthRevenueCents: number; successful: number; failed: number; pending: number };
+  memorials: { total: number; draft: number; published: number; locked: number; expired: number; deleted: number; publishedThisMonth: number };
+  totalPublicViews: number;
+}
+
+export interface PlatformFuneralHome {
+  id: string;
+  name: string;
+  ownerName?: string | null;
+  email: string;
+  phone?: string | null;
+  registeredAt: string;
+  memorialCount: number;
+  paymentsTotalCents: number;
+  lastActivityAt: string;
+  status: string;
+}
+
+export interface PlatformPayment {
+  id: string;
+  amountCents: number;
+  currency: string;
+  status: string;
+  paystackReference: string;
+  paidAt?: string | null;
+  createdAt: string;
+  funeralHome: { id: string; name: string };
+  memorial: { id: string; deceasedName: string };
+}
+
+export interface PlatformUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  passwordSetAt?: string | null;
+  lastLoginAt?: string | null;
+  createdAt: string;
+  funeralHome?: { id: string; name: string; status: string } | null;
+  passwordResetTokens: Array<{ id: string; createdAt: string; expiresAt: string }>;
+}
+
+export interface PlatformAuditLog {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  details?: unknown;
+  createdAt: string;
+  actor: { name: string; email: string };
+  funeralHome?: { name: string } | null;
+}
+
+export interface PlatformSupport {
+  resetRequests: Array<{ id: string; createdAt: string; expiresAt: string; user: { id: string; name: string; email: string; funeralHome?: { id: string; name: string } | null } }>;
+  failedLogins: Array<{ id: string; email: string; createdAt: string }>;
+  pendingInvites: number;
+  expiredInvites: number;
+  usersWithoutPasswords: Array<{ id: string; name: string; email: string; role: string; funeralHome?: { id: string; name: string } | null }>;
+}
+
+export interface PlatformAnalytics {
+  totalViews: number;
+  viewsToday: number;
+  mostViewedMemorials: Array<{ id: string; deceasedName: string; slug: string; viewCount: number; funeralHome: { id: string; name: string } }>;
+  topHomesByMemorials: Array<{ id: string; name: string; memorialCount: number }>;
+  topHomesByRevenue: Array<{ id: string; name: string; revenueCents: number }>;
+}
+
+export interface PlatformFuneralHomeDetail extends FuneralHomeProfile {
+  status: string;
+  suspendedAt?: string | null;
+  createdAt: string;
+  users: PlatformUser[];
+  memorials: Array<Memorial & { deletedAt?: string | null; editLocksAt?: string | null; publicExpiresAt?: string | null }>;
+  payments: PlatformPayment[];
+  familyInvitations: Array<FamilyInvitation & { memorial: { deceasedName: string } }>;
+  platformAuditLogs: PlatformAuditLog[];
 }
 
 export function photoUrl(path: string): string {

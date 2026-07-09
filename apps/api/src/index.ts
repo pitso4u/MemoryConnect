@@ -11,6 +11,7 @@ import publicRoutes from './routes/public';
 import paymentRoutes from './routes/payments';
 import adminRoutes from './routes/admin';
 import familyRoutes from './routes/family';
+import platformRoutes from './routes/platform';
 import { UPLOADS_DIR } from './lib/uploads';
 import { printServerUrls } from './lib/network';
 import { env } from './lib/env';
@@ -95,6 +96,7 @@ app.use('/api/v1/public', publicRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/family', familyRoutes);
+app.use('/api/v1/platform', platformRoutes);
 
 // Legacy routes for backward compatibility (will be deprecated)
 app.use('/api/auth', authLimiter, authRoutes);

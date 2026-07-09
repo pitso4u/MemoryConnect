@@ -116,8 +116,14 @@ router.post('/login', async (req, res) => {
     });
 
     if (!user || !(await bcrypt.compare(body.password, user.passwordHash))) {
+      await prisma.loginAttempt.create({ data: { email: body.email.toLowerCase(), success: false } });
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
+    if (user.funeralHome && user.funeralHome.status === 'SUSPENDED') {
+      await prisma.loginAttempt.create({ data: { email: body.email.toLowerCase(), success: false } });
+      return res.status(403).json({ success: false, error: 'This funeral home account has been suspended. Please contact Memory Connect support.' });
+    }
+    await prisma.loginAttempt.create({ data: { email: body.email.toLowerCase(), success: true } });
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
     const token = signToken({

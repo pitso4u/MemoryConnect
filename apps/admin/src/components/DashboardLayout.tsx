@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useBrand } from '../context/BrandContext';
-import { Building2, CreditCard, LayoutDashboard, LogOut, Menu, Plus, X } from 'lucide-react';
+import { Activity, Building2, CreditCard, FileClock, LayoutDashboard, LifeBuoy, LogOut, Menu, Plus, Users, X } from 'lucide-react';
 
 const funeralHomeNavigation = [
   { to: '/dashboard', label: 'Memorials', icon: LayoutDashboard, end: true },
@@ -17,6 +17,16 @@ const familyNavigation = [
   { to: '/family/memorials', label: 'Assigned Memorials', icon: LayoutDashboard },
 ];
 
+const platformNavigation = [
+  { to: '/admin-owner', label: 'Platform Overview', icon: LayoutDashboard, end: true },
+  { to: '/admin-owner/funeral-homes', label: 'Funeral Homes', icon: Building2 },
+  { to: '/admin-owner/payments', label: 'Payments', icon: CreditCard },
+  { to: '/admin-owner/users', label: 'Users', icon: Users },
+  { to: '/admin-owner/support', label: 'Support', icon: LifeBuoy },
+  { to: '/admin-owner/analytics', label: 'Analytics', icon: Activity },
+  { to: '/admin-owner/audit-logs', label: 'Audit Logs', icon: FileClock },
+];
+
 function isFamilyRole(role?: string) {
   return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
 }
@@ -27,8 +37,10 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const navigation = isFamilyRole(user?.role) ? familyNavigation : funeralHomeNavigation;
-  const portalLabel = isFamilyRole(user?.role) ? 'Family Portal' : 'Admin Portal';
+  const platformOwner = user?.role === 'SUPER_ADMIN';
+  const navigation = platformOwner ? platformNavigation : isFamilyRole(user?.role) ? familyNavigation : funeralHomeNavigation;
+  const portalLabel = platformOwner ? 'Platform Owner' : isFamilyRole(user?.role) ? 'Family Portal' : 'Admin Portal';
+  const portalName = platformOwner ? 'Memory Connect' : brand.tradingName || brand.companyName;
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
@@ -61,7 +73,7 @@ export default function DashboardLayout() {
     <div className="min-h-screen md:flex">
       <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-white/10 bg-[var(--brand-primary)] px-4 text-[var(--brand-secondary)] shadow-sm md:hidden">
         <div className="min-w-0">
-          <p className="truncate font-display text-lg leading-tight">{brand.tradingName || brand.companyName}</p>
+          <p className="truncate font-display text-lg leading-tight">{portalName}</p>
           <p className="text-[11px] opacity-60">{portalLabel}</p>
         </div>
         <button
@@ -94,9 +106,9 @@ export default function DashboardLayout() {
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-[var(--brand-primary)] text-[var(--brand-secondary)] md:flex">
         <div className="border-b border-white/10 p-6">
           {brand.logoUrl ? <img src={brand.logoUrl} alt={`${brand.companyName} logo`} className="mb-3 max-h-12 max-w-44 object-contain" /> : null}
-          <h1 className="font-display text-xl">{brand.tradingName || brand.companyName}</h1>
+          <h1 className="font-display text-xl">{portalName}</h1>
           <p className="mt-1 text-xs text-parchment/50">{portalLabel}</p>
-          {!brand.whiteLabelEnabled && <p className="mt-1 text-[11px] text-parchment/35">Powered by Memory Connect</p>}
+          {!platformOwner && !brand.whiteLabelEnabled && <p className="mt-1 text-[11px] text-parchment/35">Powered by Memory Connect</p>}
         </div>
         {navItems()}
         <div className="border-t border-white/10 p-4">

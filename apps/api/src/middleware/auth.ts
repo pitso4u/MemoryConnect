@@ -23,7 +23,7 @@ declare global {
   }
 }
 
-export function authenticate(req: Request, res: Response, next: NextFunction) {
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     return res.status(401).json({ success: false, message: 'Authentication required' });
@@ -31,7 +31,16 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 
   try {
     const token = header.slice(7);
-    req.user = jwt.verify(token, env.JWT_SECRET) as AuthPayload;
+    const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload;
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { id: true, role: true, funeralHomeId: true, funeralHome: { select: { status: true } } },
+    });
+    if (!user) return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    if (user.funeralHome?.status === 'SUSPENDED') {
+      return res.status(403).json({ success: false, error: 'This funeral home account has been suspended. Please contact Memory Connect support.' });
+    }
+    req.user = { userId: user.id, funeralHomeId: user.funeralHomeId, role: normalizeRole(user.role) };
     next();
   } catch {
     return res.status(401).json({ success: false, message: 'Invalid or expired token' });

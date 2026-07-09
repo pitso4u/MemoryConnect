@@ -49,6 +49,8 @@ model FuneralHome {
   analyticsAccessEnabled   Boolean        @default(true)
   apiAccessEnabled         Boolean        @default(false)
   dedicatedSupportEnabled  Boolean        @default(false)
+  status                   String         @default("ACTIVE")
+  suspendedAt              DateTime?
   createdAt                DateTime       @default(now())
   updatedAt                DateTime       @updatedAt
   users                    User[]
@@ -59,6 +61,7 @@ model FuneralHome {
   subscriptions            Subscription[]
   usageLedger              UsageLedger[]
   familyInvitations        FamilyInvitation[]
+  platformAuditLogs        PlatformAuditLog[]
 }
 
 model Branch {
@@ -87,6 +90,7 @@ model User {
   invitationsSent FamilyInvitation[] @relation("FamilyInvitationInviter")
   passwordResetTokens PasswordResetToken[]
   auditLogs     MemorialAuditLog[]
+  platformAuditLogs PlatformAuditLog[]
   passwordSetAt DateTime?
   lastLoginAt   DateTime?
   createdAt     DateTime    @default(now())
@@ -366,4 +370,32 @@ model Tribute {
   message    String
   approved   Boolean  @default(false)
   createdAt  DateTime @default(now())
+}
+
+model PlatformAuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String
+  actor       User     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  funeralHomeId String?
+  funeralHome FuneralHome? @relation(fields: [funeralHomeId], references: [id], onDelete: SetNull)
+  targetType  String
+  targetId    String
+  action      String
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([funeralHomeId, createdAt])
+  @@index([targetType, targetId])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  success   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([success, createdAt])
+  @@index([email, createdAt])
 }

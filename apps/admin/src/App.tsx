@@ -11,6 +11,10 @@ import MemorialDetailPage from './pages/MemorialDetailPage';
 import PaymentsPage from './pages/PaymentsPage';
 import ProfilePage from './pages/ProfilePage';
 import FamilyInvitePage from './pages/FamilyInvitePage';
+import {
+  PlatformAnalyticsPage, PlatformAuditLogsPage, PlatformDashboardPage, PlatformFuneralHomeDetailPage,
+  PlatformFuneralHomesPage, PlatformPaymentsPage, PlatformSupportPage, PlatformUsersPage,
+} from './pages/PlatformPages';
 
 function isFamilyRole(role?: string) {
   return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
@@ -25,11 +29,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function RoleRedirect() {
   const { user } = useAuth();
-  return <Navigate to={isFamilyRole(user?.role) ? '/family' : '/dashboard'} replace />;
+  return <Navigate to={user?.role === 'SUPER_ADMIN' ? '/admin-owner' : isFamilyRole(user?.role) ? '/family' : '/dashboard'} replace />;
 }
 
 function FuneralHomeOnly({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  if (user?.role === 'SUPER_ADMIN') return <Navigate to="/admin-owner" replace />;
   if (isFamilyRole(user?.role)) return <Navigate to="/family" replace />;
   return <>{children}</>;
 }
@@ -37,6 +42,12 @@ function FuneralHomeOnly({ children }: { children: React.ReactNode }) {
 function FamilyOnly({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   if (!isFamilyRole(user?.role)) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+function SuperAdminOnly({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role !== 'SUPER_ADMIN') return <Navigate to={isFamilyRole(user?.role) ? '/family' : '/dashboard'} replace />;
   return <>{children}</>;
 }
 
@@ -76,6 +87,15 @@ function AppRoutes() {
         <Route path="family/memorials/:id/biography" element={<FamilyOnly><MemorialDetailPage initialTab="obituary" /></FamilyOnly>} />
         <Route path="family/memorials/:id/programme-suggestions" element={<FamilyOnly><MemorialDetailPage initialTab="programme" /></FamilyOnly>} />
         <Route path="family/memorials/:id/preview" element={<FamilyOnly><MemorialDetailPage /></FamilyOnly>} />
+        <Route path="admin-owner" element={<SuperAdminOnly><PlatformDashboardPage /></SuperAdminOnly>} />
+        <Route path="admin-owner/funeral-homes" element={<SuperAdminOnly><PlatformFuneralHomesPage /></SuperAdminOnly>} />
+        <Route path="admin-owner/funeral-homes/:id" element={<SuperAdminOnly><PlatformFuneralHomeDetailPage /></SuperAdminOnly>} />
+        <Route path="admin-owner/payments" element={<SuperAdminOnly><PlatformPaymentsPage /></SuperAdminOnly>} />
+        <Route path="admin-owner/users" element={<SuperAdminOnly><PlatformUsersPage /></SuperAdminOnly>} />
+        <Route path="admin-owner/support" element={<SuperAdminOnly><PlatformSupportPage /></SuperAdminOnly>} />
+        <Route path="admin-owner/analytics" element={<SuperAdminOnly><PlatformAnalyticsPage /></SuperAdminOnly>} />
+        <Route path="admin-owner/audit-logs" element={<SuperAdminOnly><PlatformAuditLogsPage /></SuperAdminOnly>} />
+        <Route path="platform" element={<Navigate to="/admin-owner" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

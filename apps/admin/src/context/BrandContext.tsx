@@ -45,7 +45,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshBrand = async () => {
-    if (!token || isFamilyRole(user?.role)) return;
+    if (!token || isFamilyRole(user?.role) || user?.role === 'SUPER_ADMIN') return;
     setIsBrandLoading(true);
     try {
       const profile = await api.getFuneralHomeProfile();

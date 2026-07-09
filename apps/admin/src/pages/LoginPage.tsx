@@ -24,7 +24,7 @@ export default function LoginPage() {
     try {
       const data = await api.login(email, password);
       login(data.accessToken, data.user);
-      navigate(isFamilyRole(data.user.role) ? '/family' : '/dashboard');
+      navigate(data.user.role === 'SUPER_ADMIN' ? '/admin-owner' : isFamilyRole(data.user.role) ? '/family' : '/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
