@@ -62,6 +62,11 @@ export default function HomePage() {
           <div className="hero-grain absolute inset-0 opacity-40" />
           <div className="relative mx-auto grid min-h-[860px] max-w-7xl items-center gap-16 px-5 pb-20 pt-36 sm:px-8 lg:grid-cols-[1.15fr_0.85fr] lg:px-12 lg:pt-32">
             <div className="max-w-3xl">
+              <img
+                src="/memory-connect-logo.png"
+                alt="Memory Connect"
+                className="mb-8 h-24 w-24 rounded-2xl bg-white object-cover shadow-xl shadow-black/25 ring-1 ring-white/20 sm:h-28 sm:w-28"
+              />
               <p className="animate-fade-up mb-7 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.24em] text-gold-light">
                 <span className="h-px w-10 bg-gold" />
                 Made for South African funeral homes
