@@ -106,6 +106,7 @@ model Memorial {
   serviceDate           DateTime?
   serviceVenue          String?
   deceasedPhotoUrl      String?            @map("coverPhotoUrl")
+  logoUrl               String?
   obituary              String?
   biography             Json?
   programme             Json

@@ -78,6 +78,36 @@ export const api = {
   updateFuneralHomeProfile: (data: Partial<FuneralHomeProfile>) =>
     request<FuneralHomeProfile>('/api/v1/auth/funeral-home-profile', { method: 'PATCH', body: JSON.stringify(data) }),
 
+  uploadFuneralHomeLogo: async (file: File) => {
+    const token = getToken();
+    const form = new FormData();
+    form.append('logo', file);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/auth/funeral-home-logo`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || 'Logo upload failed');
+      return json.data as { logoUrl: string; brand: BrandProfile };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') throw new Error('Logo upload timed out');
+        throw error;
+      }
+      throw new Error('Logo upload failed');
+    }
+  },
+
   getMemorials: () => request<Memorial[]>('/api/v1/memorials'),
 
   createMemorial: (data: { deceasedName: string; serviceDate?: string; serviceVenue?: string }) =>
@@ -99,6 +129,36 @@ export const api = {
 
   deleteMemorial: (id: string) =>
     request<{ filesDeleted: number; bytesDeleted: number }>(`/api/v1/memorials/${id}`, { method: 'DELETE' }),
+
+  uploadLogo: async (memorialId: string, file: File) => {
+    const token = getToken();
+    const form = new FormData();
+    form.append('logo', file);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/memorials/${memorialId}/logo`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || 'Logo upload failed');
+      return json.data as { logoUrl: string };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') throw new Error('Logo upload timed out');
+        throw error;
+      }
+      throw new Error('Logo upload failed');
+    }
+  },
 
   createFamilyInvitation: (memorialId: string, data: { name: string; email?: string; phone?: string; role: 'FAMILY_MANAGER' | 'FAMILY_CONTRIBUTOR' }) =>
     request<FamilyInvitation>(`/api/v1/family/memorials/${memorialId}/invitations`, { method: 'POST', body: JSON.stringify(data) }),

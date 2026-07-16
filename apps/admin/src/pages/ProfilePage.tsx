@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import type { BrandProfile, BrandTemplate } from '@memorialconnect/shared';
 import { BRAND_TEMPLATES, brandCssVariables, brandFromFuneralHome } from '../lib/brand';
-import { Building2, Check, Eye, FileText, Monitor, Palette, Smartphone, Wand2 } from 'lucide-react';
+import { Building2, Check, Eye, FileText, ImageIcon, Monitor, Palette, Smartphone, Wand2 } from 'lucide-react';
 import { api, FuneralHomeProfile, photoUrl } from '../lib/api';
 import { useBrand } from '../context/BrandContext';
 
@@ -69,6 +69,7 @@ export default function ProfilePage() {
   const [brand, setBrand] = useState<BrandProfile | null>(null);
   const [message, setMessage] = useState('');
   const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   useEffect(() => {
     api.getFuneralHomeProfile().then((data) => {
@@ -209,8 +210,73 @@ export default function ProfilePage() {
           <section className="mt-5 rounded-lg border border-parchment-dark bg-white p-6">
             <h2 className="flex items-center gap-2 font-display text-2xl text-ink"><FileText size={20} /> Logos, backgrounds & white label</h2>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              {textField('logoUrl', 'Logo URL', 'https://', 'url')}
-              {textField('iconUrl', 'Icon / favicon URL', 'https://', 'url')}
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-muted">Logo</label>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (!file.type.startsWith('image/')) { setMessage('Please select an image file'); return; }
+                        if (file.size > 5 * 1024 * 1024) { setMessage('Logo must be less than 5MB'); return; }
+                        setUploadingLogo(true);
+                        setMessage('');
+                        try {
+                          const result = await api.uploadFuneralHomeLogo(file);
+                          setBrand((current) => {
+                            if (!current) return current;
+                            const next = { ...current, logoUrl: result.logoUrl };
+                            setPreviewBrand(next);
+                            return next;
+                          });
+                          setMessage('Logo uploaded');
+                        } catch (err) {
+                          setMessage(err instanceof Error ? err.message : 'Upload failed');
+                        } finally {
+                          setUploadingLogo(false);
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      id="logo-upload"
+                    />
+                    <label
+                      htmlFor="logo-upload"
+                      className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg transition-colors ${
+                        brand.logoUrl ? 'border-gold bg-gold/5' : 'border-parchment-dark hover:border-gold/50 hover:bg-gold/5'
+                      }`}
+                    >
+                      {brand.logoUrl ? (
+                        <div className="relative w-full max-w-xs">
+                          <img src={photoUrl(brand.logoUrl)} alt="Logo preview" className="w-full h-auto max-h-24 object-contain rounded" />
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <ImageIcon size={24} className="mx-auto mb-1 text-parchment-dark/50" />
+                          <p className="text-xs text-ink">{uploadingLogo ? 'Uploading...' : 'Click to upload logo'}</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                  {brand.logoUrl && (
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold text-muted">Or paste logo URL</span>
+                      <input
+                        type="url"
+                        value={brand.logoUrl || ''}
+                        placeholder="https://"
+                        onChange={(e) => {
+                          const newUrl = e.target.value;
+                          updateBrand({ logoUrl: newUrl as any });
+                        }}
+                        className="w-full rounded-lg border border-parchment-dark bg-white px-3 py-2 text-xs outline-none focus:border-[var(--brand-accent)]"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
               {textField('homeBackgroundUrl', 'Home background URL', 'https://', 'url')}
               {textField('loginBackgroundUrl', 'Login background URL', 'https://', 'url')}
               {textField('memorialHeroUrl', 'Memorial hero image URL', 'https://', 'url')}
@@ -275,7 +341,7 @@ function BrandPreview({ brand, mode, style }: { brand: BrandProfile; mode: Previ
           <p className="mt-3 text-sm opacity-75">{brand.footerText || 'Dignified digital memorials, family updates and service programmes.'}</p>
           <div className="mt-5 rounded-lg border border-current/10 bg-white/20 p-4">
             <p className="text-xs uppercase tracking-[0.18em] opacity-60">{mode === 'pdf' ? 'Programme PDF' : mode === 'admin' ? 'Admin Portal' : 'Public Memorial'}</p>
-            <p className="mt-2 text-lg font-semibold">Nomvula Dlamini</p>
+            <p className="mt-2 text-lg font-semibold">JB Soetsang</p>
             <p className="text-sm opacity-70">Service programme · gallery · tributes</p>
           </div>
           <button type="button" className="mt-5 w-full px-4 py-3 text-sm font-semibold" style={{ borderRadius: 'var(--brand-radius)', background: 'var(--brand-primary)', color: 'var(--brand-secondary)' }}>

@@ -1,5 +1,7 @@
 import { Router, Request } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
+import path from 'path';
 import { prisma } from '../lib/prisma';
 import { authenticate, canAccessMemorial, canManageFuneralHome, isFamilyRole, isFuneralHomeRole, normalizeRole, ROLES, signPreviewToken } from '../middleware/auth';
 import { createMemorialSlug, formatMemorial } from '../lib/utils';
@@ -18,6 +20,7 @@ import {
 import { permanentlyDeleteMemorial } from '../lib/retention';
 import { isZodError } from '../lib/validation';
 import { brandFromFuneralHome } from '@memorialconnect/shared';
+import { ensureUploadsDir, photoPublicUrl } from '../lib/uploads';
 
 const router = Router();
 
@@ -32,6 +35,7 @@ const createSchema = z.object({
   dateOfDeath: z.string().optional(),
   serviceDate: z.string().optional(),
   serviceVenue: z.string().optional(),
+  logoUrl: z.string().regex(/^(https?:\/\/|\/)/).optional().or(z.literal('')),
 });
 
 const updateSchema = z.object({
@@ -41,6 +45,7 @@ const updateSchema = z.object({
   serviceDate: z.string().optional().nullable(),
   serviceVenue: z.string().optional().nullable(),
   deceasedPhotoUrl: z.string().optional().nullable(),
+  logoUrl: z.string().regex(/^(https?:\/\/|\/)/).optional().or(z.literal('')).nullable(),
   obituary: z.string().optional().nullable(),
   biography: z.record(z.unknown()).optional(),
   programme: z.array(z.record(z.unknown())).optional(),
@@ -61,6 +66,7 @@ async function syncLockedMemorials(funeralHomeId: string) {
   await prisma.memorial.updateMany({
     where: {
       funeralHomeId,
+      isDemo: false,
       status: MEMORIAL_STATUS.PUBLISHED,
       editLocksAt: { lte: new Date() },
       publicExpiresAt: { gt: new Date() },
@@ -111,6 +117,7 @@ router.post('/', authenticate, async (req, res) => {
         dateOfDeath: body.dateOfDeath ? new Date(body.dateOfDeath) : null,
         serviceDate: body.serviceDate ? new Date(body.serviceDate) : null,
         serviceVenue: body.serviceVenue,
+        logoUrl: body.logoUrl || null,
         funeralHomeId: req.user!.funeralHomeId,
         programme: [],
         announcements: [],
@@ -123,6 +130,53 @@ router.post('/', authenticate, async (req, res) => {
     console.error('Create memorial error:', error);
     res.status(500).json({ success: false, error: 'Failed to create memorial' });
   }
+});
+
+const logoStorage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    const id = paramId(req);
+    cb(null, ensureUploadsDir(id));
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.png';
+    const safe = `logo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    cb(null, safe);
+  },
+});
+
+const logoUpload = multer({
+  storage: logoStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, PNG, WebP, and GIF images are allowed'));
+    }
+  },
+});
+
+router.post('/:id/logo', authenticate, (req, res) => {
+  const id = paramId(req);
+  logoUpload.single('logo')(req, res, async (err) => {
+    if (err) return res.status(400).json({ success: false, error: err.message });
+
+    try {
+      const access = await canAccessMemorial(req.user!, id);
+      if (!access) return res.status(404).json({ success: false, error: 'Memorial not found' });
+
+      const file = req.file as Express.Multer.File;
+      if (!file) return res.status(400).json({ success: false, error: 'No logo file provided' });
+
+      const logoUrl = photoPublicUrl(id, file.filename);
+      await prisma.memorial.update({ where: { id }, data: { logoUrl } });
+
+      res.json({ success: true, data: { logoUrl } });
+    } catch (error) {
+      console.error('Logo upload error:', error);
+      res.status(500).json({ success: false, error: 'Failed to upload logo' });
+    }
+  });
 });
 
 router.get('/:id/analytics', authenticate, async (req, res) => {
@@ -191,6 +245,7 @@ router.post('/:id/initialize-publish-payment', authenticate, async (req, res) =>
     include: { funeralHome: { select: { email: true } } },
   });
   if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+  if (memorial.isDemo) return res.status(403).json({ success: false, error: 'The demo memorial does not require payment.' });
   if (![MEMORIAL_STATUS.DRAFT, MEMORIAL_STATUS.PAID_PENDING].includes(memorial.status as 'DRAFT' | 'PAID_PENDING')) {
     return res.status(409).json({ success: false, error: 'Only a draft funeral can enter the publishing payment flow' });
   }
@@ -259,6 +314,7 @@ router.get('/:id/verify-publish-payment/:reference', authenticate, async (req, r
   }
   const memorial = await prisma.memorial.findFirst({ where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId } });
   if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+  if (memorial.isDemo) return res.status(403).json({ success: false, error: 'The demo memorial does not use the payment flow.' });
   const reference = Array.isArray(req.params.reference) ? req.params.reference[0] : req.params.reference;
   const payment = await prisma.payment.findFirst({ where: { memorialId: memorial.id, paystackReference: reference } });
   if (!payment) return res.status(404).json({ success: false, error: 'Payment not found' });
@@ -311,6 +367,9 @@ router.patch('/:id', authenticate, async (req, res) => {
     if (!access) return res.status(404).json({ success: false, error: 'Memorial not found' });
     const existing = await prisma.memorial.findFirst({ where: { id } });
     if (!existing) return res.status(404).json({ success: false, error: 'Memorial not found' });
+    if (existing.isDemo && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Only a platform owner can update the demo memorial.' });
+    }
     if (existing.status === MEMORIAL_STATUS.DELETED) return res.status(410).json({ success: false, error: 'Memorial has been deleted' });
     if (isEditLocked(existing) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return lockedResponse(res);
 
@@ -362,6 +421,9 @@ for (const [path, direction] of [['/:id/programme/next', 1], ['/:id/programme/pr
       where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId, deletedAt: null },
     });
     if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+    if (memorial.isDemo && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Only a platform owner can control the demo memorial.' });
+    }
     // Moving the live cursor is an operator action, not an edit to locked memorial content.
     // It must remain available while a published service is being presented.
     const programme = memorial.programme as unknown[];
@@ -379,6 +441,9 @@ router.delete('/:id', authenticate, async (req, res) => {
   }
   const memorial = await prisma.memorial.findFirst({ where: { id: paramId(req), funeralHomeId: req.user!.funeralHomeId } });
   if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+  if (memorial.isDemo && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') {
+    return res.status(403).json({ success: false, error: 'Only a platform owner can delete the demo memorial.' });
+  }
   if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return lockedResponse(res);
   if (![MEMORIAL_STATUS.DRAFT, MEMORIAL_STATUS.PAID_PENDING, MEMORIAL_STATUS.PUBLISHED].includes(memorial.status as any)) {
     return lockedResponse(res);

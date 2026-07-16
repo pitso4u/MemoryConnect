@@ -196,6 +196,7 @@ export interface MemorialSummary {
   serviceVenue?: string;
   deceasedPhotoUrl?: string;
   status: MemorialStatus;
+  isDemo?: boolean;
   paymentStatus: 'UNPAID' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'ABANDONED';
   paymentId?: string;
   publishedAt?: string;
@@ -207,6 +208,7 @@ export interface MemorialSummary {
   storageBytes?: number;
   createdAt: string;
   updatedAt: string;
+  logoUrl?: string;
 }
 
 /**
@@ -443,6 +445,7 @@ export const createMemorialSchema = z.object({
   deceasedName: z.string().min(2, 'Deceased name is required'),
   serviceDate: z.string().optional(),
   serviceVenue: z.string().optional(),
+  logoUrl: z.string().regex(/^(https?:\/\/|\/)/).optional().or(z.literal('')),
 });
 
 /**
@@ -454,7 +457,8 @@ export const updateMemorialSchema = z.object({
   dateOfDeath: z.string().optional(),
   serviceDate: z.string().optional(),
   serviceVenue: z.string().optional(),
-  deceasedPhotoUrl: z.string().url().optional().or(z.literal('')),
+  deceasedPhotoUrl: z.string().url().optional().or(z.literal('')).nullable(),
+  logoUrl: z.string().regex(/^(https?:\/\/|\/)/).optional().or(z.literal('')).nullable(),
   obituary: z.string().optional(),
   biography: z.any().optional(),
   programme: z.array(z.any()).optional(),

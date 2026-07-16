@@ -10,56 +10,9 @@ import { env } from '../lib/env';
 import { isPubliclyViewable, MEMORIAL_STATUS } from '../lib/publishing';
 import { verifyPreviewToken } from '../middleware/auth';
 import { z } from 'zod';
+import { DEMO_SLUG, demoMemorialSnapshot, demoProgramme } from '../lib/demoMemorial';
 
 const router = Router();
-
-const DEMO_PROGRAMME = [
-  { id: 'demo-1', type: 'opening_prayer', title: 'Opening prayer', speaker: 'Rev. Thabo Molefe', order: 0 },
-  { id: 'demo-2', type: 'family_tribute', title: 'A tribute from the family', speaker: 'Lerato Dlamini', order: 1 },
-  { id: 'demo-3', type: 'hymn', title: 'Hymn and reflection', speaker: 'Community Choir', order: 2 },
-  { id: 'demo-4', type: 'burial', title: 'Committal and closing prayer', speaker: 'Rev. Thabo Molefe', order: 3 },
-];
-
-const DEMO_MEMORIAL = {
-  id: 'memory-connect-demo',
-  slug: 'demo',
-  deceasedName: 'Nomvula Dlamini',
-  dateOfBirth: '1954-05-12',
-  dateOfDeath: '2026-06-20',
-  serviceDate: '2026-06-27T08:00:00.000Z',
-  serviceVenue: 'Ubuntu Community Chapel',
-  deceasedPhotoUrl: null,
-  obituary: 'Nomvula Dlamini lived with warmth, courage and a generous spirit. She devoted her life to her family, her faith and the community she loved. Her kindness will continue to be felt in every life she touched.',
-  biography: null,
-  programme: DEMO_PROGRAMME,
-  currentProgrammeIndex: 1,
-  announcements: [{ id: 'demo-announcement', message: 'Thank you for joining the family in remembrance.', active: true }],
-  settings: { theme: 'elegant', showTributeWall: false, moderateTributes: true },
-  status: MEMORIAL_STATUS.PUBLISHED,
-  paymentStatus: 'SUCCESS',
-  paymentId: null,
-  publishedAt: '2026-06-27T07:00:00.000Z',
-  editLocksAt: '2026-06-30T07:00:00.000Z',
-  publicExpiresAt: '2099-12-31T23:59:59.000Z',
-  deleteAfter: null,
-  deletedAt: null,
-  viewCount: 0,
-  storageBytes: 0,
-  photos: [],
-  tributes: [
-    { id: 'demo-tribute', memorialId: 'memory-connect-demo', authorName: 'The Mokoena Family', message: 'A beautiful soul remembered with love.', approved: true, createdAt: '2026-06-27T10:00:00.000Z' },
-  ],
-  locations: [
-    { id: 'demo-location', memorialId: 'memory-connect-demo', type: 'CHURCH', name: 'Ubuntu Community Chapel', addressText: 'Johannesburg, Gauteng', latitude: -26.2041, longitude: 28.0473, notes: 'Please arrive 30 minutes before the service.', orderIndex: 0, createdAt: '2026-06-20T10:00:00.000Z', updatedAt: '2026-06-20T10:00:00.000Z' },
-  ],
-  funeralHome: {
-    name: 'Ubuntu Funeral Care', phone: '011 555 0123', email: 'care@example.co.za', address: 'Johannesburg, Gauteng',
-    logoUrl: null, primaryColor: '#c9a84c', secondaryColor: '#1a1a2e', accentColor: '#dfc06e', backgroundColor: '#1a1a2e', textColor: '#f5f0e8', websiteUrl: null, facebookUrl: null,
-    brand: brandFromFuneralHome({ name: 'Ubuntu Funeral Care', phone: '011 555 0123', email: 'care@example.co.za', address: 'Johannesburg, Gauteng', primaryColor: '#c9a84c', secondaryColor: '#1a1a2e', accentColor: '#dfc06e', backgroundColor: '#1a1a2e', textColor: '#f5f0e8' }),
-  },
-  createdAt: '2026-06-20T10:00:00.000Z',
-  updatedAt: '2026-06-27T10:00:00.000Z',
-};
 
 function queryValue(value: unknown): string | undefined {
   return typeof value === 'string' ? value : Array.isArray(value) && typeof value[0] === 'string' ? value[0] : undefined;
@@ -87,29 +40,55 @@ const viewSchema = z.object({
   visitorId: z.string().trim().min(12).max(200).optional(),
 });
 
+const publicMemorialInclude = {
+  photos: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
+  tributes: { where: { approved: true }, orderBy: { createdAt: 'desc' } },
+  locations: { orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
+  funeralHome: {
+    select: {
+      name: true, tradingName: true, phone: true, email: true, address: true, logoUrl: true, iconUrl: true,
+      primaryColor: true, secondaryColor: true, accentColor: true, backgroundColor: true, textColor: true,
+      fontFamily: true, buttonStyle: true, cardStyle: true, borderRadius: true, whatsapp: true,
+      websiteUrl: true, facebookUrl: true, instagramUrl: true, tiktokUrl: true, footerText: true,
+      copyrightText: true, whiteLabelEnabled: true, themeTemplate: true, homeBackgroundUrl: true,
+      loginBackgroundUrl: true, memorialHeroUrl: true, projectorBackgroundUrl: true, pdfWatermarkUrl: true,
+      splashScreenUrl: true, memorialStyle: true, animationLevel: true, galleryLayout: true,
+      timelineStyle: true, programmeStyle: true,
+    },
+  },
+} satisfies Prisma.MemorialInclude;
+
+async function getSeededDemoMemorial() {
+  let memorial = null;
+  try {
+    memorial = await prisma.memorial.findFirst({
+      where: { slug: DEMO_SLUG, isDemo: true, deletedAt: null },
+      include: publicMemorialInclude,
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021') return null;
+    throw error;
+  }
+  if (!memorial) return null;
+  return {
+    ...formatMemorial(memorial as unknown as Record<string, unknown>),
+    photos: memorial.photos,
+    tributes: memorial.tributes,
+    locations: memorial.locations,
+    funeralHome: { ...memorial.funeralHome, brand: brandFromFuneralHome(memorial.funeralHome) },
+  };
+}
+
 router.get('/memorials/:slug', async (req, res) => {
   try {
     const slug = queryValue(req.params.slug);
-    if (slug === 'demo') return res.json({ success: true, data: DEMO_MEMORIAL });
+    if (slug === DEMO_SLUG) {
+      const demo = await getSeededDemoMemorial();
+      return res.json({ success: true, data: demo || demoMemorialSnapshot() });
+    }
     const memorial = await prisma.memorial.findFirst({
       where: { slug },
-      include: {
-        photos: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
-        tributes: { where: { approved: true }, orderBy: { createdAt: 'desc' } },
-        locations: { orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
-        funeralHome: {
-          select: {
-            name: true, tradingName: true, phone: true, email: true, address: true, logoUrl: true, iconUrl: true,
-            primaryColor: true, secondaryColor: true, accentColor: true, backgroundColor: true, textColor: true,
-            fontFamily: true, buttonStyle: true, cardStyle: true, borderRadius: true, whatsapp: true,
-            websiteUrl: true, facebookUrl: true, instagramUrl: true, tiktokUrl: true, footerText: true,
-            copyrightText: true, whiteLabelEnabled: true, themeTemplate: true, homeBackgroundUrl: true,
-            loginBackgroundUrl: true, memorialHeroUrl: true, projectorBackgroundUrl: true, pdfWatermarkUrl: true,
-            splashScreenUrl: true, memorialStyle: true, animationLevel: true, galleryLayout: true,
-            timelineStyle: true, programmeStyle: true,
-          },
-        },
-      },
+      include: publicMemorialInclude,
     });
     if (!memorial) return res.status(404).json({ success: false, message: 'Memorial not found' });
     const preview = verifyPreviewToken(queryValue(req.query.preview));
@@ -120,6 +99,10 @@ router.get('/memorials/:slug', async (req, res) => {
     );
     if (!isPreview && !isPubliclyViewable(memorial)) return expired(res);
 
+    const brand = brandFromFuneralHome(memorial.funeralHome);
+    // Use memorial's custom logo if set, otherwise fall back to funeral home's logo
+    brand.logoUrl = memorial.logoUrl || brand.logoUrl;
+
     res.json({
       success: true,
       data: {
@@ -127,7 +110,7 @@ router.get('/memorials/:slug', async (req, res) => {
         photos: memorial.photos,
         tributes: memorial.tributes,
         locations: memorial.locations,
-        funeralHome: { ...memorial.funeralHome, brand: brandFromFuneralHome(memorial.funeralHome) },
+        funeralHome: { ...memorial.funeralHome, brand },
         isPreview,
       },
     });
@@ -140,7 +123,7 @@ router.get('/memorials/:slug', async (req, res) => {
 router.post('/memorials/:slug/view', async (req, res) => {
   try {
     const slug = queryValue(req.params.slug);
-    if (slug === 'demo') return res.json({ success: true, data: { counted: false, viewCount: 0 } });
+    if (slug === DEMO_SLUG) return res.json({ success: true, data: { counted: false, viewCount: 0 } });
     if (req.get('x-memoryconnect-preview')?.toLowerCase() === 'true') {
       return res.json({ success: true, data: { counted: false } });
     }
@@ -190,18 +173,22 @@ router.post('/memorials/:slug/view', async (req, res) => {
 
 router.get('/memorials/:slug/projector', async (req, res) => {
   const slug = queryValue(req.params.slug);
-  if (slug === 'demo') {
+  if (slug === DEMO_SLUG) {
+    const seeded = await getSeededDemoMemorial();
+    const demo = seeded || demoMemorialSnapshot();
+    const programme = demo.programme as typeof demoProgramme;
+    const currentProgrammeIndex = Number(demo.currentProgrammeIndex) || 0;
     return res.json({
       success: true,
       data: {
-        deceasedName: DEMO_MEMORIAL.deceasedName,
-        currentIndex: DEMO_MEMORIAL.currentProgrammeIndex,
-        totalItems: DEMO_PROGRAMME.length,
-        currentItem: DEMO_PROGRAMME[DEMO_MEMORIAL.currentProgrammeIndex],
-        nextItem: DEMO_PROGRAMME[DEMO_MEMORIAL.currentProgrammeIndex + 1],
-        announcements: DEMO_MEMORIAL.announcements,
-        photos: DEMO_MEMORIAL.photos,
-        funeralHome: DEMO_MEMORIAL.funeralHome,
+        deceasedName: demo.deceasedName,
+        currentIndex: currentProgrammeIndex,
+        totalItems: programme.length,
+        currentItem: programme[currentProgrammeIndex],
+        nextItem: programme[currentProgrammeIndex + 1],
+        announcements: demo.announcements,
+        photos: demo.photos,
+        funeralHome: demo.funeralHome,
       },
     });
   }
@@ -220,6 +207,11 @@ router.get('/memorials/:slug/projector', async (req, res) => {
   const isPreview = Boolean(preview && preview.memorialId === memorial.id && preview.funeralHomeId === memorial.funeralHomeId);
   if (!isPreview && !isPubliclyViewable(memorial)) return expired(res);
   const programme = memorial.programme as Array<Record<string, unknown>>;
+  
+  const brand = brandFromFuneralHome(memorial.funeralHome);
+  // Use memorial's custom logo if set, otherwise fall back to funeral home's logo
+  brand.logoUrl = memorial.logoUrl || brand.logoUrl;
+
   res.json({
     success: true,
     data: {
@@ -230,14 +222,14 @@ router.get('/memorials/:slug/projector', async (req, res) => {
       nextItem: programme[memorial.currentProgrammeIndex + 1] || null,
       announcements: (memorial.announcements as unknown[]).filter((item) => (item as Record<string, unknown>).active),
       photos: memorial.photos,
-      funeralHome: { ...memorial.funeralHome, brand: brandFromFuneralHome(memorial.funeralHome) },
+      funeralHome: { ...memorial.funeralHome, brand },
     },
   });
 });
 
 router.post('/memorials/:slug/tributes', async (req, res) => {
   try {
-    if (queryValue(req.params.slug) === 'demo') {
+    if (queryValue(req.params.slug) === DEMO_SLUG) {
       return res.status(403).json({ success: false, message: 'The sample memorial does not accept tributes.' });
     }
     const body = tributeSchema.parse(req.body);

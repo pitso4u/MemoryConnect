@@ -1,13 +1,19 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { prisma } from '../lib/prisma';
 import { authenticate, canManageFuneralHome, isFuneralHomeRole, normalizeRole, ROLES, signToken } from '../middleware/auth';
 import { registerSchema, loginSchema } from '@memorialconnect/shared';
 import { brandFromFuneralHome } from '@memorialconnect/shared';
 import { isZodError } from '../lib/validation';
 import { z } from 'zod';
+import { UPLOADS_DIR } from '../lib/uploads';
 
 const router = Router();
+
+const urlOrPath = z.string().regex(/^(https?:\/\/|\/)/, 'Must be a valid URL or relative path').optional().nullable().or(z.literal(''));
 
 const profileSchema = z.object({
   name: z.string().min(2).optional(),
@@ -15,8 +21,8 @@ const profileSchema = z.object({
   email: z.string().email().optional(),
   phone: z.string().max(40).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
-  logoUrl: z.string().url().optional().nullable().or(z.literal('')),
-  iconUrl: z.string().url().optional().nullable().or(z.literal('')),
+  logoUrl: urlOrPath,
+  iconUrl: urlOrPath,
   primaryColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional().nullable(),
   secondaryColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional().nullable(),
   accentColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional().nullable(),
@@ -35,12 +41,12 @@ const profileSchema = z.object({
   copyrightText: z.string().max(200).optional().nullable(),
   whiteLabelEnabled: z.boolean().optional(),
   themeTemplate: z.string().max(80).optional().nullable(),
-  homeBackgroundUrl: z.string().url().optional().nullable().or(z.literal('')),
-  loginBackgroundUrl: z.string().url().optional().nullable().or(z.literal('')),
-  memorialHeroUrl: z.string().url().optional().nullable().or(z.literal('')),
-  projectorBackgroundUrl: z.string().url().optional().nullable().or(z.literal('')),
-  pdfWatermarkUrl: z.string().url().optional().nullable().or(z.literal('')),
-  splashScreenUrl: z.string().url().optional().nullable().or(z.literal('')),
+  homeBackgroundUrl: urlOrPath,
+  loginBackgroundUrl: urlOrPath,
+  memorialHeroUrl: urlOrPath,
+  projectorBackgroundUrl: urlOrPath,
+  pdfWatermarkUrl: urlOrPath,
+  splashScreenUrl: urlOrPath,
   memorialStyle: z.string().max(80).optional().nullable(),
   animationLevel: z.string().max(80).optional().nullable(),
   galleryLayout: z.string().max(80).optional().nullable(),
@@ -217,6 +223,56 @@ router.patch('/funeral-home-profile', authenticate, async (req, res) => {
     if (isZodError(error)) return res.status(400).json({ success: false, error: error.errors[0].message });
     res.status(500).json({ success: false, error: 'Failed to update funeral home profile' });
   }
+});
+
+const logoStorage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    const funeralHomeId = req.user!.funeralHomeId;
+    const dir = path.join(UPLOADS_DIR, `funeral-home-${funeralHomeId}`);
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.png';
+    const safe = `logo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    cb(null, safe);
+  },
+});
+
+const logoUpload = multer({
+  storage: logoStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, PNG, WebP, and GIF images are allowed'));
+    }
+  },
+});
+
+router.post('/funeral-home-logo', authenticate, (req, res) => {
+  if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
+    return res.status(403).json({ success: false, error: 'Only an admin can update the funeral home logo' });
+  }
+  const funeralHomeId = req.user!.funeralHomeId;
+  logoUpload.single('logo')(req, res, async (err) => {
+    if (err) return res.status(400).json({ success: false, error: err.message });
+    try {
+      const file = req.file as Express.Multer.File;
+      if (!file) return res.status(400).json({ success: false, error: 'No logo file provided' });
+
+      const logoUrl = `/uploads/funeral-home-${funeralHomeId}/${file.filename}`;
+      const funeralHome = await prisma.funeralHome.update({
+        where: { id: funeralHomeId },
+        data: { logoUrl },
+      });
+      res.json({ success: true, data: { logoUrl, brand: brandFromFuneralHome(funeralHome as unknown as Record<string, unknown>) } });
+    } catch (error) {
+      console.error('Funeral home logo upload error:', error);
+      res.status(500).json({ success: false, error: 'Failed to upload logo' });
+    }
+  });
 });
 
 export default router;
