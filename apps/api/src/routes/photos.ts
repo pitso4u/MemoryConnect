@@ -3,8 +3,9 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { prisma } from '../lib/prisma';
-import { authenticate } from '../middleware/auth';
+import { authenticate, canAccessMemorial, isFamilyRole } from '../middleware/auth';
 import { ensureUploadsDir, photoPublicUrl, UPLOADS_DIR } from '../lib/uploads';
+import { isEditLocked } from '../lib/publishing';
 
 const router = Router({ mergeParams: true });
 
@@ -52,8 +53,9 @@ router.post('/', authenticate, (req, res) => {
     }
 
     try {
-      const memorial = await prisma.memorial.findFirst({
-        where: { id: memorialId, funeralHomeId: req.user!.funeralHomeId },
+      const access = await canAccessMemorial(req.user!, memorialId);
+      const memorial = access && await prisma.memorial.findFirst({
+        where: { id: access.id },
         include: { photos: true },
       });
 
@@ -66,6 +68,11 @@ router.post('/', authenticate, (req, res) => {
         return res.status(400).json({ success: false, error: 'No photos provided' });
       }
 
+      if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') {
+        for (const file of (req.files as Express.Multer.File[]) || []) if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        return res.status(423).json({ success: false, error: 'This funeral programme is locked because it has already been published and shared.' });
+      }
+      const incomingBytes = files.reduce((sum, file) => sum + file.size, 0);
       const category = typeof req.body.category === 'string' ? req.body.category : 'other';
       const caption = typeof req.body.caption === 'string' ? req.body.caption : undefined;
       const startOrder = memorial.photos.length;
@@ -79,10 +86,22 @@ router.post('/', authenticate, (req, res) => {
               caption: files.length === 1 ? caption : undefined,
               category,
               order: startOrder + index,
+              storageBytes: file.size,
             },
           })
         )
       );
+
+      await prisma.memorial.update({
+        where: { id: memorialId },
+        data: {
+          storageBytes: { increment: incomingBytes },
+          deceasedPhotoUrl: memorial.deceasedPhotoUrl || photos[0]?.url,
+        },
+      });
+      await prisma.memorialAuditLog.create({
+        data: { memorialId, userId: req.user!.userId, action: 'photo_uploaded', details: { count: photos.length, category } },
+      });
 
       res.status(201).json({ success: true, data: photos });
     } catch (error) {
@@ -97,9 +116,12 @@ router.delete('/:photoId', authenticate, async (req, res) => {
     const memorialId = paramId(req);
     const photoId = paramPhotoId(req);
 
-    const memorial = await prisma.memorial.findFirst({
-      where: { id: memorialId, funeralHomeId: req.user!.funeralHomeId },
-    });
+    if (isFamilyRole(req.user!.role)) {
+      return res.status(403).json({ success: false, error: 'Family users cannot delete photos' });
+    }
+
+    const access = await canAccessMemorial(req.user!, memorialId);
+    const memorial = access && await prisma.memorial.findFirst({ where: { id: access.id } });
 
     if (!memorial) {
       return res.status(404).json({ success: false, error: 'Memorial not found' });
@@ -115,11 +137,27 @@ router.delete('/:photoId', authenticate, async (req, res) => {
 
     const filename = path.basename(photo.url);
     const filePath = path.join(UPLOADS_DIR, memorialId, filename);
+    let bytesFreed = photo.storageBytes || 0;
     if (fs.existsSync(filePath)) {
+      const stat = fs.statSync(filePath);
+      bytesFreed = stat.size || bytesFreed;
       fs.unlinkSync(filePath);
     }
 
-    await prisma.photo.delete({ where: { id: photoId } });
+    if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') {
+      return res.status(423).json({ success: false, error: 'This funeral programme is locked because it has already been published and shared.' });
+    }
+
+    await prisma.$transaction([
+      prisma.photo.update({ where: { id: photoId }, data: { deletedAt: new Date(), storageBytes: 0 } }),
+      prisma.memorial.update({
+        where: { id: memorialId },
+        data: {
+          storageBytes: { decrement: bytesFreed },
+          deceasedPhotoUrl: memorial.deceasedPhotoUrl === photo.url ? null : undefined,
+        },
+      }),
+    ]);
     res.json({ success: true });
   } catch (error) {
     console.error('Photo delete error:', error);

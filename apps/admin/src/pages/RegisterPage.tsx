@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useBrand } from '../context/BrandContext';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
@@ -13,6 +14,7 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const { brand } = useBrand();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,7 +24,7 @@ export default function RegisterPage() {
     try {
       const data = await api.register(form);
       login(data.accessToken, data.user);
-      navigate('/');
+      navigate('/profile');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
@@ -31,10 +33,11 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-12">
+    <div className="brand-surface min-h-screen flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="font-display text-3xl text-ink">Memory Connect</h1>
+          {brand.logoUrl && <img src={brand.logoUrl} alt={`${brand.companyName} logo`} className="mx-auto mb-4 max-h-14 max-w-48 object-contain" />}
+          <h1 className="font-display text-3xl text-ink">{brand.whiteLabelEnabled ? 'Create your branded portal' : 'Memory Connect'}</h1>
           <p className="text-muted mt-2">Register your funeral home</p>
         </div>
 
@@ -63,7 +66,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-ink text-parchment rounded-lg font-medium hover:bg-ink-light transition disabled:opacity-50"
+            className="brand-button w-full py-3 font-medium transition disabled:opacity-50"
           >
             {loading ? 'Creating account...' : 'Create Account'}
           </button>

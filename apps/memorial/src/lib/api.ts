@@ -6,6 +6,7 @@ import type {
   Memorial,
   Announcement,
   MemorialLocation,
+  BrandProfile,
 } from '@memorialconnect/shared';
 
 const API_URL = getApiUrl();
@@ -48,8 +49,27 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 }
 
-export interface PublicMemorial extends Memorial {
-  funeralHome: { name: string; phone?: string; logoUrl?: string };
+export interface PublicMemorial extends Omit<Memorial, 'funeralHome'> {
+  isPreview?: boolean;
+  funeralHome: {
+    id?: string;
+    name: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    logoUrl?: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+    websiteUrl?: string;
+    facebookUrl?: string;
+    instagramUrl?: string;
+    tiktokUrl?: string;
+    whatsapp?: string;
+    footerText?: string;
+    copyrightText?: string;
+    whiteLabelEnabled?: boolean;
+    brand?: BrandProfile;
+  };
   photos: Photo[];
   tributes: Tribute[];
   locations: MemorialLocation[];
@@ -62,13 +82,20 @@ export interface ProjectorData {
   currentItem: ProgrammeItem | null;
   nextItem: ProgrammeItem | null;
   announcements: Announcement[];
+  photos: Photo[];
+  funeralHome?: PublicMemorial['funeralHome'];
 }
 
-export type { ProgrammeItem, Photo, Tribute, Announcement, MemorialLocation };
+export type { ProgrammeItem, Photo, Tribute, Announcement, MemorialLocation, BrandProfile };
 
 export const api = {
-  getMemorial: (slug: string) => request<PublicMemorial>(`/api/v1/public/memorials/${slug}`),
-  getProjector: (slug: string) => request<ProjectorData>(`/api/v1/public/memorials/${slug}/projector`),
+  getMemorial: (slug: string, previewToken?: string) => request<PublicMemorial>(`/api/v1/public/memorials/${slug}${previewToken ? `?preview=${encodeURIComponent(previewToken)}` : ''}`),
+  recordMemorialView: (slug: string, visitorId: string) =>
+    request<{ counted: boolean; viewCount?: number }>(`/api/v1/public/memorials/${slug}/view`, {
+      method: 'POST',
+      body: JSON.stringify({ visitorId }),
+    }),
+  getProjector: (slug: string, previewToken?: string) => request<ProjectorData>(`/api/v1/public/memorials/${slug}/projector${previewToken ? `?preview=${encodeURIComponent(previewToken)}` : ''}`),
   submitTribute: (slug: string, data: { authorName: string; message: string }) =>
     request<{ pending: boolean }>(`/api/v1/public/memorials/${slug}/tributes`, {
       method: 'POST',

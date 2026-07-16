@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -9,6 +8,10 @@ import memorialRoutes from './routes/memorials';
 import photoRoutes from './routes/photos';
 import locationRoutes from './routes/locations';
 import publicRoutes from './routes/public';
+import paymentRoutes from './routes/payments';
+import adminRoutes from './routes/admin';
+import familyRoutes from './routes/family';
+import platformRoutes from './routes/platform';
 import { UPLOADS_DIR } from './lib/uploads';
 import { printServerUrls } from './lib/network';
 import { env } from './lib/env';
@@ -49,11 +52,12 @@ function buildCorsOrigin():
 
 // Rate limiting for auth endpoints
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 attempts per window
+  windowMs: env.AUTH_RATE_LIMIT_WINDOW_MS,
+  max: env.AUTH_RATE_LIMIT_MAX ?? (env.NODE_ENV === 'production' ? 10 : 100),
   message: { success: false, message: 'Too many attempts, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: true,
 });
 
 app.use(helmet({
@@ -71,7 +75,12 @@ if (env.NODE_ENV === 'production') {
   app.use(morgan('dev'));
 }
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buffer) => {
+    (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+  },
+}));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.get('/health', (_req, res) => {
@@ -84,6 +93,10 @@ app.use('/api/v1/memorials', memorialRoutes);
 app.use('/api/v1/memorials/:id/locations', locationRoutes);
 app.use('/api/v1/memorials/:id/photos', photoRoutes);
 app.use('/api/v1/public', publicRoutes);
+app.use('/api/v1/payments', paymentRoutes);
+app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/family', familyRoutes);
+app.use('/api/v1/platform', platformRoutes);
 
 // Legacy routes for backward compatibility (will be deprecated)
 app.use('/api/auth', authLimiter, authRoutes);
@@ -91,6 +104,7 @@ app.use('/api/memorials', memorialRoutes);
 app.use('/api/memorials/:id/locations', locationRoutes);
 app.use('/api/memorials/:id/photos', photoRoutes);
 app.use('/api/m', publicRoutes);
+app.use('/api/family', familyRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

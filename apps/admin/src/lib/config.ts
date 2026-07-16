@@ -8,6 +8,10 @@ export function getApiUrl(): string {
     return fromEnv.replace(/\/api\/?$/, '').replace(/\/$/, '');
   }
   if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname.includes('memoryconnect.co.za')) {
+      return `${window.location.protocol}//api.memoryconnect.co.za`;
+    }
     return `${window.location.protocol}//${window.location.hostname}:${API_PORT}`;
   }
   return `http://localhost:${API_PORT}`;
@@ -22,6 +26,10 @@ export function getMemorialBaseUrl(demoNetworkUrl?: string): string {
   if (fromEnv) return fromEnv.replace(/\/$/, '');
 
   if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname.includes('memoryconnect.co.za')) {
+      return `${window.location.protocol}//memoryconnect.co.za`;
+    }
     return `${window.location.protocol}//${window.location.hostname}:${MEMORIAL_PORT}`;
   }
   return `http://localhost:${MEMORIAL_PORT}`;

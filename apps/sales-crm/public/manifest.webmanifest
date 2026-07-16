@@ -1,0 +1,17 @@
+{
+  "name": "SmartSales CRM",
+  "short_name": "SmartSales",
+  "description": "Offline-first personal sales CRM for projects, prospects, follow-ups, demos, and monthly reporting.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fbfaf4",
+  "theme_color": "#12312d",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
