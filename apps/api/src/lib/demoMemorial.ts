@@ -1,14 +1,27 @@
 import { brandFromFuneralHome } from '@memorialconnect/shared';
 import { MEMORIAL_STATUS, PAYMENT_STATUS } from './publishing';
 
+// =============================================================================
+// DEMO MEMORIAL — Memory Connect
+// =============================================================================
+// All demo data lives here. Edit this file to customise the demo memorial.
+// Image files are served from:
+//   - /uploads/demo/   →  apps/api/uploads/demo/  (copied from prisma/demo-assets/photos/ by seed-demo.ts)
+//   - /brand/          →  apps/memorial/public/brand/
+// =============================================================================
+
+// ── Identifiers ──────────────────────────────────────────────────────────────
+
 export const DEMO_SLUG = 'demo';
 export const DEMO_MEMORIAL_ID = 'memory-connect-demo';
 export const DEMO_FUNERAL_HOME_EMAIL = 'demo@memoryconnect.co.za';
-export const DEMO_FUNERAL_HOME_NAME = 'Ubuntu Legacy Funeral Care';
+export const DEMO_FUNERAL_HOME_NAME = 'Pitso Soetsang Funeral Care';
 export const DEMO_PUBLISHED_AT = '2026-07-12T08:00:00.000Z';
 
+// ── Programme ───────────────────────────────────────────────────────────────
+
 export const demoProgramme = [
-  { id: 'demo-programme-01', type: 'opening_prayer', title: 'Processional and Seating of the Family', speaker: 'Ubuntu Legacy Funeral Care Team', duration: 8, order: 0 },
+  { id: 'demo-programme-01', type: 'opening_prayer', title: 'Processional and Seating of the Family', speaker: 'Pitso Soetsang Funeral Care Team', duration: 8, order: 0 },
   { id: 'demo-programme-02', type: 'opening_prayer', title: 'Opening Prayer', speaker: 'Rev. Thabo Mokoena', duration: 5, order: 1 },
   { id: 'demo-programme-03', type: 'speaker', title: 'Welcome and Introductions', speaker: 'Ms. Naledi Khumalo, Programme Director', duration: 6, order: 2 },
   { id: 'demo-programme-04', type: 'scripture', title: 'Scripture Reading: Psalm 23', speaker: 'Grandchild: Lethabo Maseko', duration: 4, order: 3 },
@@ -25,36 +38,20 @@ export const demoProgramme = [
   { id: 'demo-programme-15', type: 'speaker', title: 'Vote of Thanks', speaker: 'Mr. Kabelo Maseko', duration: 4, order: 14 },
   { id: 'demo-programme-16', type: 'speaker', title: 'Notices and Directions', speaker: 'Funeral Director: Ms. Lerato Ndlovu', duration: 4, order: 15 },
   { id: 'demo-programme-17', type: 'closing_prayer', title: 'Closing Prayer', speaker: 'Pastor Miriam Phiri', duration: 4, order: 16 },
-  { id: 'demo-programme-18', type: 'burial', title: 'Recessional and Proceeding to Cemetery', speaker: 'Ubuntu Legacy Funeral Care Team', duration: 12, order: 17 },
+  { id: 'demo-programme-18', type: 'burial', title: 'Recessional and Proceeding to Cemetery', speaker: 'Pitso Soetsang Funeral Care Team', duration: 12, order: 17 },
 ];
 
+// ── Biography ────────────────────────────────────────────────────────────────
+// Structure matches the Biography interface from @memorialconnect/shared.
+// Edit the text fields below to customise for the actual deceased person.
+
 export const demoBiography = {
-  sections: [
-    {
-      heading: 'Childhood and Family Roots',
-      body: 'Mme Nomvula Grace Maseko was born in the Free State in the winter of 1954, the second child in a home where faith, discipline and neighbourly care were part of daily life. She grew up surrounded by cousins, aunties and grandparents who taught her to greet every person with respect and to make room at the table for anyone who arrived hungry.',
-    },
-    {
-      heading: 'Education and Working Life',
-      body: 'She loved reading from a young age and carried that love into her studies. After completing school, she trained in administration and later became a steady presence in a busy community clinic office. Colleagues remember her as the person who knew every file, every family name and every gentle way to calm someone who was anxious.',
-    },
-    {
-      heading: 'Marriage and Home',
-      body: 'Nomvula and Daniel built a home marked by laughter, Sunday meals and open doors. Their children remember school shoes polished before sunrise, prayers whispered at night, and a mother who could correct with firmness while still making each child feel chosen and loved.',
-    },
-    {
-      heading: 'Character and Values',
-      body: 'Her life was shaped by service. She believed that dignity was shown in small acts: arriving on time, visiting the sick, writing things down, keeping promises and speaking carefully when emotions were high. She had a quiet humour and a strength that made other people feel safe.',
-    },
-    {
-      heading: 'Faith and Community',
-      body: 'At church she served in the women’s fellowship, helped prepare meals after services and mentored younger women who were finding their own way. She did not seek attention, but her absence will be felt in every place where she used to stand with folded hands and a ready smile.',
-    },
-    {
-      heading: 'Family Legacy',
-      body: 'Nomvula leaves a legacy of tenderness, order and courage. Her family gives thanks for a mother, wife, sister, grandmother and friend whose love was practical, faithful and enduring. May her memory continue to gather the family in kindness.',
-    },
-  ],
+  lifeStory: 'Mme Nomvula Grace Maseko was born in the Free State in the winter of 1954, the second child in a home where faith, discipline and neighbourly care were part of daily life. She grew up surrounded by cousins, aunties and grandparents who taught her to greet every person with respect and to make room at the table for anyone who arrived hungry.',
+  education: 'She loved reading from a young age and carried that love into her studies. After completing school, she trained in administration.',
+  career: 'She worked as an administrator at a busy community clinic office. Colleagues remember her as the person who knew every file, every family name and every gentle way to calm someone who was anxious.',
+  marriage: 'Nomvula and Daniel built a home marked by laughter, Sunday meals and open doors. Their children remember school shoes polished before sunrise, prayers whispered at night, and a mother who could correct with firmness while still making each child feel chosen and loved.',
+  children: 'Thandi, Kabelo and Lerato Maseko.',
+  achievements: 'Her life was shaped by service. She believed that dignity was shown in small acts: arriving on time, visiting the sick, writing things down, keeping promises and speaking carefully when emotions were high. She had a quiet humour and a strength that made other people feel safe.',
   timeline: [
     { id: 'demo-timeline-1954', year: '1954', title: 'Born in the Free State', description: 'Welcomed into a close family rooted in faith and community.' },
     { id: 'demo-timeline-1978', year: '1978', title: 'Started community clinic work', description: 'Began a career of practical care and administration.' },
@@ -64,16 +61,22 @@ export const demoBiography = {
   ],
 };
 
+// ── Obituary ─────────────────────────────────────────────────────────────────
+
 export const demoObituary = `In Loving Memory of Mme Nomvula Grace Maseko
 
 Mme Nomvula Grace Maseko lived with a rare combination of gentleness and strength. She was a woman of prayer, a careful listener, a patient organiser and a loving anchor to her family. Those who knew her will remember the calm way she entered a room, the kindness in her voice and the practical care she offered without waiting to be asked.
 
 This demonstration memorial shows how Memory Connect can hold the story, programme, photographs, tributes and directions for one funeral in a single respectful link. All personal contact details and locations shown here are sample demonstration information.`;
 
+// ── Announcements ────────────────────────────────────────────────────────────
+
 export const demoAnnouncements = [
   { id: 'demo-announcement-01', message: 'You are viewing a Memory Connect demonstration memorial. Details and locations are sample information.', active: true, createdAt: DEMO_PUBLISHED_AT },
   { id: 'demo-announcement-02', message: 'Guests may follow the programme, view directions, browse photos and read approved tributes from one link.', active: true, createdAt: DEMO_PUBLISHED_AT },
 ];
+
+// ── Settings ─────────────────────────────────────────────────────────────────
 
 export const demoSettings = {
   theme: 'elegant',
@@ -82,7 +85,12 @@ export const demoSettings = {
   showDonations: false,
 };
 
-export const demoPhotos = [
+// ── Photos ───────────────────────────────────────────────────────────────────
+// Image files live in: apps/api/prisma/demo-assets/photos/
+// The seed script (seed-demo.ts) copies them to: apps/api/uploads/demo/
+// They are served by the API at: /uploads/demo/demo-photo-XX.jpg
+
+const DEMO_PHOTO_FILES = [
   ['demo-photo-01.jpg', 'A dignified portrait for the memorial hero.', 'recent'],
   ['demo-photo-02.jpg', 'Family gathered in remembrance and gratitude.', 'family'],
   ['demo-photo-03.jpg', 'A quiet moment from the family album.', 'family'],
@@ -97,7 +105,9 @@ export const demoPhotos = [
   ['demo-photo-12.jpg', 'A meaningful moment preserved for guests.', 'other'],
   ['demo-photo-13.jpg', 'Family love across the years.', 'family'],
   ['demo-photo-14.jpg', 'Remembered with dignity and tenderness.', 'recent'],
-].map(([fileName, caption, category], order) => ({
+];
+
+export const demoPhotos = DEMO_PHOTO_FILES.map(([fileName, caption, category], order) => ({
   id: `demo-photo-${String(order + 1).padStart(2, '0')}`,
   memorialId: DEMO_MEMORIAL_ID,
   url: `/uploads/${DEMO_SLUG}/${fileName}`,
@@ -109,6 +119,8 @@ export const demoPhotos = [
   deletedAt: null,
   createdAt: DEMO_PUBLISHED_AT,
 }));
+
+// ── Locations ────────────────────────────────────────────────────────────────
 
 export const demoLocations = [
   {
@@ -165,6 +177,8 @@ export const demoLocations = [
   },
 ];
 
+// ── Tributes ──────────────────────────────────────────────────────────────────
+
 export const demoTributes = [
   ['Mr. Daniel Maseko, spouse', 'My dearest Nomvula, thank you for building a home where love had a rhythm and prayer had a place. I will miss your voice in the morning and your hand in mine.'],
   ['Thandi Maseko, daughter', 'Mama taught us that care is something you do, not only something you say. Every meal, every school uniform, every late-night prayer told us we were loved.'],
@@ -174,7 +188,7 @@ export const demoTributes = [
   ['Mrs. Palesa Nkosi, sister', 'My sister was a keeper of family history. She knew who needed a phone call, who needed a visit and who needed to be reminded they belonged.'],
   ['Mr. Sipho Dlamini, colleague', 'At the clinic she brought order and humanity together. People trusted her because she treated every file like it belonged to a real family.'],
   ['Mrs. Dineo Nkosi, friend', 'We shared many cups of tea and many prayers. Nomvula listened deeply and answered slowly. Her friendship was a shelter.'],
-  ['Women’s Fellowship', 'We honour a faithful servant who prepared, encouraged, visited and prayed. Her seat will be empty, but her example remains with us.'],
+  ['Women\'s Fellowship', 'We honour a faithful servant who prepared, encouraged, visited and prayed. Her seat will be empty, but her example remains with us.'],
   ['Ubuntu Legacy Funeral Care', 'This tribute wall is demonstration content showing how approved messages can be preserved respectfully for guests and family.'],
 ].map(([authorName, message], index) => ({
   id: `demo-tribute-${String(index + 1).padStart(2, '0')}`,
@@ -185,16 +199,24 @@ export const demoTributes = [
   createdAt: new Date(Date.parse(DEMO_PUBLISHED_AT) + index * 60_000).toISOString(),
 }));
 
+// ── Funeral Home Branding ────────────────────────────────────────────────────
+// Brand image files are served from apps/memorial/public/brand/ at /brand/...
+// Available brand files:
+//   /brand/memory-connect-logo-horizontal.png
+//   /brand/memory-connect-logo-full.png
+//   /brand/memory-connect-emblem.png
+//   /brand/memory-connect-og-1200x630.png
+
 export const demoFuneralHome = {
   id: 'memory-connect-demo-home',
   name: DEMO_FUNERAL_HOME_NAME,
-  tradingName: 'Ubuntu Legacy Funeral Care',
+  tradingName: 'Pitso Soetsang Funeral Care',
   email: 'care@example.co.za',
-  phone: '011 555 0199',
-  whatsapp: '+27115550199',
+  phone: '073 056 9211',
+  whatsapp: '+2773 056 9211',
   address: '25 Memorial Avenue, Johannesburg, Gauteng',
-  logoUrl: 'https://memoryconnect.co.za/brand/memory-connect-logo-horizontal.png',
-  iconUrl: 'https://memoryconnect.co.za/brand/memory-connect-emblem.png',
+  logoUrl: '/brand/memory-connect-logo-horizontal.png',
+  iconUrl: '/brand/memory-connect-emblem.png',
   primaryColor: '#0b2346',
   secondaryColor: '#f8f4ec',
   accentColor: '#c79a3d',
@@ -214,7 +236,7 @@ export const demoFuneralHome = {
   themeTemplate: 'luxury',
   homeBackgroundUrl: null,
   loginBackgroundUrl: null,
-  memorialHeroUrl: null,
+  memorialHeroUrl: '/brand/memory-connect-og-1200x630.png',
   projectorBackgroundUrl: null,
   pdfWatermarkUrl: null,
   splashScreenUrl: null,
@@ -224,6 +246,8 @@ export const demoFuneralHome = {
   timelineStyle: 'editorial',
   programmeStyle: 'ceremonial',
 };
+
+// ── Memorial Core ────────────────────────────────────────────────────────────
 
 export const demoMemorialCore = {
   id: DEMO_MEMORIAL_ID,
@@ -255,6 +279,8 @@ export const demoMemorialCore = {
   createdAt: DEMO_PUBLISHED_AT,
   updatedAt: DEMO_PUBLISHED_AT,
 };
+
+// ── Snapshot (fallback when no DB record exists) ──────────────────────────────
 
 export function demoMemorialSnapshot() {
   return {
