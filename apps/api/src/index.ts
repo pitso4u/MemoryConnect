@@ -13,6 +13,7 @@ import adminRoutes from './routes/admin';
 import familyRoutes from './routes/family';
 import platformRoutes from './routes/platform';
 import feedbackRoutes from './routes/feedback';
+import { prisma } from './lib/prisma';
 import { UPLOADS_DIR } from './lib/uploads';
 import { printServerUrls } from './lib/network';
 import { env } from './lib/env';
@@ -86,6 +87,37 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'memorialconnect-api', version: 'v1' });
+});
+
+// Dynamic sitemap for SEO
+app.get('/sitemap.xml', async (_req, res) => {
+  try {
+    const published = await prisma.memorial.findMany({
+      where: { status: 'PUBLISHED', deletedAt: null, isDemo: false },
+      select: { slug: true, updatedAt: true, publishedAt: true },
+      orderBy: { publishedAt: 'desc' },
+    });
+
+    const staticPages = [
+      { loc: 'https://memoryconnect.co.za/', priority: '1.0', changefreq: 'weekly' },
+      { loc: 'https://memoryconnect.co.za/demo', priority: '0.8', changefreq: 'monthly' },
+    ];
+
+    const baseUrl = 'https://memoryconnect.co.za';
+    const urls = [
+      ...staticPages.map((p) => `  <url>\n    <loc>${p.loc}</loc>\n    <changefreq>${p.changefreq}</changefreq>\n    <priority>${p.priority}</priority>\n  </url>`),
+      ...published.map((m: { slug: string; updatedAt: Date | null; publishedAt: Date | null }) => `  <url>\n    <loc>${baseUrl}/${m.slug}</loc>\n    <lastmod>${(m.updatedAt || m.publishedAt || new Date()).toISOString().split('T')[0]}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.6</priority>\n  </url>`),
+    ];
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`;
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch {
+    // Fallback to static sitemap
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://memoryconnect.co.za/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n  <url>\n    <loc>https://memoryconnect.co.za/demo</loc>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n</urlset>`;
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  }
 });
 
 // API v1 routes

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Link, useParams } from 'react-router-dom';
 import { api, PublicMemorial, photoUrl } from '../lib/api';
 import { brandCssVariables, brandFromFuneralHome } from '../lib/brand';
@@ -141,11 +142,52 @@ export default function MemorialPage() {
   const biographySections = Array.isArray(biography?.sections) ? biography.sections : [];
   const biographyTimeline = Array.isArray(biography?.timeline) ? biography.timeline : [];
 
+  const memorialUrl = `https://memoryconnect.co.za/${slug}`;
+  const memorialTitle = `${memorial.deceasedName} - Memorial | Memory Connect South Africa`;
+  const memorialDescription = `In loving memory of ${memorial.deceasedName}. View the funeral programme, obituary, photo gallery, service directions and leave a tribute.`;
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Memory Connect', item: 'https://memoryconnect.co.za/' },
+      { '@type': 'ListItem', position: 2, name: 'Memorials', item: 'https://memoryconnect.co.za/memorials' },
+      { '@type': 'ListItem', position: 3, name: memorial.deceasedName, item: memorialUrl },
+    ],
+  };
+
+  const funeralServiceJsonLd = memorial.serviceDate ? {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: `Funeral Service of ${memorial.deceasedName}`,
+    description: memorial.obituary ? memorial.obituary.slice(0, 200) : `Funeral service for ${memorial.deceasedName}`,
+    startDate: memorial.serviceDate,
+    location: memorial.serviceVenue ? {
+      '@type': 'Place',
+      name: memorial.serviceVenue,
+    } : undefined,
+    performer: displayName,
+  } : null;
+
   return (
-    <div
-      className="min-h-screen bg-[var(--brand-background)] pb-20 text-[var(--brand-text)]"
-      style={brandVars}
-    >
+    <>
+      <Helmet>
+        <title>{memorialTitle}</title>
+        <meta name="description" content={memorialDescription} />
+        <link rel="canonical" href={memorialUrl} />
+        <meta property="og:title" content={memorialTitle} />
+        <meta property="og:description" content={memorialDescription} />
+        <meta property="og:url" content={memorialUrl} />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content={memorialTitle} />
+        <meta name="twitter:description" content={memorialDescription} />
+        <script type="application/ld+json">{JSON.stringify(breadcrumbJsonLd)}</script>
+        {funeralServiceJsonLd && <script type="application/ld+json">{JSON.stringify(funeralServiceJsonLd)}</script>}
+      </Helmet>
+      <div
+        className="min-h-screen bg-[var(--brand-background)] pb-20 text-[var(--brand-text)]"
+        style={brandVars}
+      >
       {memorial.isPreview && (
         <div className="sticky top-0 z-50 bg-[var(--brand-accent)] px-4 py-2 text-center text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-primary)] shadow-lg">
           Private preview · This memorial is not public
@@ -448,6 +490,7 @@ export default function MemorialPage() {
         </aside>
       )}
     </div>
+    </>
   );
 }
 
