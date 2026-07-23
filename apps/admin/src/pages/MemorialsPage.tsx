@@ -1,11 +1,103 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, Memorial } from '../lib/api';
-import { Plus, Calendar, MapPin } from 'lucide-react';
+import { api, Memorial, FuneralContactEnquiry } from '../lib/api';
+import { Plus, Calendar, MapPin, Phone, Mail, User, MessageSquare } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 function isFamilyRole(role?: string) {
   return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
+}
+
+function isFuneralHomeAdmin(role?: string) {
+  return role === 'SUPER_ADMIN' || role === 'FUNERAL_HOME_ADMIN';
+}
+
+function ContactEnquiriesWidget() {
+  const [enquiries, setEnquiries] = useState<FuneralContactEnquiry[]>([]);
+  const [summary, setSummary] = useState<{ NEW: number; CONTACTED: number; CLOSED: number; total: number; thisMonth: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    api.getContactEnquiries()
+      .then((data) => {
+        setEnquiries(data.enquiries);
+        setSummary(data.summary);
+      })
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return null;
+  if (!summary || summary.total === 0) return null;
+
+  return (
+    <section className="mb-8 rounded-xl border border-parchment-dark bg-white p-5">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          <MessageSquare size={18} className="text-gold-dark" />
+          <h2 className="font-display text-xl text-ink">Customer Enquiries</h2>
+        </div>
+        <div className="flex gap-3 text-sm">
+          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-amber-800 font-medium">{summary.NEW} new</span>
+          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-blue-800 font-medium">{summary.CONTACTED} contacted</span>
+          <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-green-800 font-medium">{summary.CLOSED} closed</span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="mt-4 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-parchment p-3 text-center">
+              <p className="text-xs text-muted">Total Enquiries</p>
+              <p className="font-display text-2xl text-ink">{summary.total}</p>
+            </div>
+            <div className="rounded-lg bg-parchment p-3 text-center">
+              <p className="text-xs text-muted">This Month</p>
+              <p className="font-display text-2xl text-ink">{summary.thisMonth}</p>
+            </div>
+            <div className="rounded-lg bg-parchment p-3 text-center">
+              <p className="text-xs text-muted">Conversion Rate</p>
+              <p className="font-display text-2xl text-ink">
+                {summary.total > 0 ? Math.round((summary.CLOSED / summary.total) * 100) : 0}%
+              </p>
+            </div>
+          </div>
+
+          {enquiries.slice(0, 5).map((e) => (
+            <div key={e.id} className="rounded-lg border border-parchment-dark p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <User size={14} className="text-muted" />
+                  <span className="text-sm font-medium text-ink">{e.name}</span>
+                </div>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                  e.contactStatus === 'NEW' ? 'bg-amber-100 text-amber-800' :
+                  e.contactStatus === 'CONTACTED' ? 'bg-blue-100 text-blue-800' :
+                  'bg-green-100 text-green-800'
+                }`}>{e.contactStatus}</span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted">
+                <span className="flex items-center gap-1"><Phone size={12} />{e.phone}</span>
+                {e.email && <span className="flex items-center gap-1"><Mail size={12} />{e.email}</span>}
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                Memorial: {e.memorial.deceasedName} — {new Date(e.createdAt).toLocaleDateString('en-ZA')}
+              </p>
+            </div>
+          ))}
+
+          {enquiries.length > 5 && (
+            <p className="text-center text-xs text-muted">+{enquiries.length - 5} more enquiries</p>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default function MemorialsPage() {
@@ -48,6 +140,7 @@ export default function MemorialsPage() {
           New Memorial
         </Link>}
       </div>
+      {!familyUser && isFuneralHomeAdmin(user?.role) && <ContactEnquiriesWidget />}
       <div className="mb-6 flex flex-wrap gap-2">
         {(['ALL', 'DRAFT', 'PAID_PENDING', 'PUBLISHED', 'LOCKED', 'EXPIRED'] as const).map((item) => (
           <button

@@ -1,4 +1,5 @@
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import crypto from 'crypto';
 import express from 'express';
 import request from 'supertest';
@@ -9,6 +10,7 @@ import { prisma } from '../lib/prisma';
 import {
   addHours,
   completePublishPayment,
+  isPubliclyViewable,
   MEMORIAL_STATUS,
   PAYMENT_PURPOSE,
   PUBLISH_PRICE_CENTS,
@@ -19,6 +21,14 @@ const app = express();
 app.use(express.json());
 app.use('/api/v1/memorials', memorialRoutes);
 app.use('/api/v1/public', publicRoutes);
+
+beforeAll(() => {
+  execFileSync('npx', ['prisma', 'db', 'push', '--schema=prisma/schema.prisma', '--skip-generate'], {
+    cwd: process.cwd(),
+    stdio: 'ignore',
+    shell: process.platform === 'win32',
+  });
+});
 
 async function home(label: string) {
   const funeralHome = await prisma.funeralHome.create({ data: { name: label, email: `${label}-${Date.now()}@example.com` } });
@@ -61,11 +71,44 @@ describe('pay-per-funeral lifecycle', () => {
   it('serves a permanent sample memorial and projector', async () => {
     const memorial = await request(app).get('/api/v1/public/memorials/demo');
     expect(memorial.status).toBe(200);
-    expect(memorial.body.data).toMatchObject({ slug: 'demo', deceasedName: 'Nomvula Dlamini' });
+    expect(memorial.body.data).toMatchObject({ slug: 'demo', deceasedName: 'Mme Nomvula Grace Maseko', isDemo: true });
+    expect(memorial.body.data.obituary.length).toBeGreaterThan(400);
+    expect(memorial.body.data.programme.length).toBeGreaterThanOrEqual(12);
+    expect(memorial.body.data.photos.length).toBeGreaterThanOrEqual(10);
+    expect(memorial.body.data.locations.length).toBeGreaterThanOrEqual(3);
+    expect(memorial.body.data.tributes.length).toBeGreaterThanOrEqual(6);
+    expect(memorial.body.data.publicExpiresAt).toBeNull();
+    expect(memorial.body.data.paymentStatus).toBe('SUCCESS');
 
     const projector = await request(app).get('/api/v1/public/memorials/demo/projector');
     expect(projector.status).toBe(200);
-    expect(projector.body.data.totalItems).toBeGreaterThan(0);
+    expect(projector.body.data.totalItems).toBeGreaterThanOrEqual(12);
+  });
+
+  it('treats demo memorials as permanent and blocks ordinary payment and deletion flows', async () => {
+    const { funeralHome, token } = await home('protected-demo');
+    const demo = await prisma.memorial.create({
+      data: {
+        slug: `protected-demo-${Date.now()}`,
+        deceasedName: 'Protected Demo',
+        funeralHomeId: funeralHome.id,
+        programme: [],
+        announcements: [],
+        settings: { showTributeWall: true },
+        status: MEMORIAL_STATUS.PUBLISHED,
+        isDemo: true,
+        paymentStatus: 'SUCCESS',
+        publicExpiresAt: null,
+        deleteAfter: null,
+      },
+    });
+
+    expect(isPubliclyViewable(demo)).toBe(true);
+    expect((await request(app).post(`/api/v1/memorials/${demo.id}/initialize-publish-payment`).set('Authorization', `Bearer ${token}`)).status).toBe(403);
+    expect((await request(app).delete(`/api/v1/memorials/${demo.id}`).set('Authorization', `Bearer ${token}`)).status).toBe(403);
+
+    await prisma.memorial.delete({ where: { id: demo.id } });
+    await prisma.funeralHome.delete({ where: { id: funeralHome.id } });
   });
 
   it('allows a signed private preview without publishing or counting a public view', async () => {

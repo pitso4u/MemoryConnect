@@ -3,7 +3,7 @@ import { permanentlyDeleteMemorial } from '../apps/api/src/lib/retention';
 
 async function main() {
   const memorials = await prisma.memorial.findMany({
-    where: { deleteAfter: { lt: new Date() } },
+    where: { deleteAfter: { lt: new Date() }, isDemo: false },
     select: { id: true },
   });
   let filesDeleted = 0;

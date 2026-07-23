@@ -47,7 +47,12 @@ export function isPubliclyViewable(memorial: {
   status: string;
   publicExpiresAt: Date | null;
   deletedAt: Date | null;
+  isDemo?: boolean | null;
 }, now = new Date()) {
+  if (memorial.isDemo) {
+    return [MEMORIAL_STATUS.PUBLISHED, MEMORIAL_STATUS.LOCKED].includes(memorial.status as 'PUBLISHED' | 'LOCKED')
+      && !memorial.deletedAt;
+  }
   return [MEMORIAL_STATUS.PUBLISHED, MEMORIAL_STATUS.LOCKED].includes(memorial.status as 'PUBLISHED' | 'LOCKED')
     && !memorial.deletedAt
     && Boolean(memorial.publicExpiresAt && memorial.publicExpiresAt > now);

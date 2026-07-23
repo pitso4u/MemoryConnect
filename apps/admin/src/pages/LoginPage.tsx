@@ -16,6 +16,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const { brand } = useBrand();
   const navigate = useNavigate();
+  const defaultLogo = !brand.whiteLabelEnabled && !brand.logoUrl ? '/brand/memory-connect-logo-horizontal.png' : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +38,7 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden bg-[var(--brand-primary)]">
         {brand.loginBackgroundUrl && <div className="absolute inset-0 bg-cover bg-center opacity-35" style={{ backgroundImage: `url(${brand.loginBackgroundUrl})` }} />}
         <div className="relative text-center px-12">
-          {brand.logoUrl && <img src={brand.logoUrl} alt={`${brand.companyName} logo`} className="mx-auto mb-6 max-h-20 max-w-72 object-contain" />}
+          {(brand.logoUrl || defaultLogo) && <img src={brand.logoUrl || defaultLogo || ''} alt={`${brand.companyName} logo`} className="mx-auto mb-6 max-h-20 max-w-72 rounded bg-white/95 p-2 object-contain" />}
           <h1 className="font-display text-5xl text-[var(--brand-secondary)] mb-4">{brand.tradingName || brand.companyName}</h1>
           <p className="text-[var(--brand-secondary)]/70 text-lg font-light max-w-md">
             Honour every life with a beautiful digital memorial experience.
@@ -49,6 +50,7 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
           <div className="lg:hidden mb-8 text-center">
+            {defaultLogo && <img src={defaultLogo} alt="Memory Connect" className="mx-auto mb-4 h-auto w-52" />}
             <h1 className="font-display text-3xl text-ink">{brand.tradingName || brand.companyName}</h1>
           </div>
 

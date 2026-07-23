@@ -392,6 +392,58 @@ export interface FuneralHome {
 }
 
 /**
+ * Feedback submitted by a funeral attendee
+ */
+export interface FuneralFeedback {
+  id: string;
+  memorialId: string;
+  overallRating: number;
+  staffRating?: number | null;
+  organisationRating?: number | null;
+  venueRating?: number | null;
+  recommend?: boolean | null;
+  useAgain?: boolean | null;
+  comments?: string | null;
+  allowContact: boolean;
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  contactStatus?: string;
+  contactedAt?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Aggregated feedback summary for a memorial
+ */
+export interface FuneralFeedbackSummary {
+  averageRating: number;
+  totalResponses: number;
+  recommendPercentage: number;
+  useAgainPercentage: number;
+  averageStaffRating: number;
+  averageOrganisationRating: number;
+  averageVenueRating: number;
+}
+
+/**
+ * Dashboard contact-request enquiry
+ */
+export interface FuneralContactEnquiry {
+  id: string;
+  memorialId: string;
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  overallRating: number;
+  comments?: string | null;
+  contactStatus: string;
+  contactedAt?: string | null;
+  createdAt: string;
+  memorial: { deceasedName: string; slug: string };
+}
+
+/**
  * Standard API response wrapper
  */
 export interface ApiResponse<T> {
@@ -523,3 +575,22 @@ export const tributeSchema = z.object({
   authorName: z.string().min(2, 'Name must be at least 2 characters'),
   message: z.string().min(1, 'Message is required').max(1000, 'Message must be less than 1000 characters'),
 });
+
+/**
+ * Validation schema for funeral feedback submission
+ */
+export const funeralFeedbackSchema = z.object({
+  overallRating: z.number().int().min(1, 'Rating must be at least 1').max(5, 'Rating must be at most 5'),
+  staffRating: z.number().int().min(1).max(5).optional().nullable(),
+  organisationRating: z.number().int().min(1).max(5).optional().nullable(),
+  venueRating: z.number().int().min(1).max(5).optional().nullable(),
+  recommend: z.boolean().optional().nullable(),
+  useAgain: z.boolean().optional().nullable(),
+  comments: z.string().max(2000, 'Comments must be less than 2000 characters').optional().nullable(),
+  allowContact: z.boolean().default(false),
+  name: z.string().min(1, 'Name is required when requesting contact').optional().nullable(),
+  phone: z.string().min(1, 'Phone is required when requesting contact').optional().nullable(),
+  email: z.string().email('Invalid email').optional().nullable(),
+});
+
+export type FuneralFeedbackInput = z.infer<typeof funeralFeedbackSchema>;

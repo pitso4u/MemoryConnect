@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api, PublicMemorial, photoUrl } from '../lib/api';
 import { brandCssVariables, brandFromFuneralHome } from '../lib/brand';
 import {
-  BookOpen, Calendar, MapPin, Image, MessageSquare, Heart, Navigation,
+  BookOpen, Calendar, MapPin, Image, MessageSquare, Heart, Navigation, ArrowRight, Star,
 } from 'lucide-react';
+import { getAdminUrl, getPublicUrl } from '../lib/config';
 
 const sections = [
   { key: 'programme', label: 'Programme', icon: BookOpen },
@@ -12,6 +13,7 @@ const sections = [
   { key: 'gallery', label: 'Gallery', icon: Image },
   { key: 'directions', label: 'Directions', icon: MapPin },
   { key: 'tributes', label: 'Tributes', icon: MessageSquare },
+  { key: 'feedback', label: 'Funeral Feedback', icon: Star },
 ] as const;
 
 type Section = typeof sections[number]['key'];
@@ -130,6 +132,14 @@ export default function MemorialPage() {
   const brandVars = brandCssVariables(brand) as React.CSSProperties;
   const displayName = brand.tradingName || brand.companyName || memorial.funeralHome.name;
   const heroImage = brand.memorialHeroUrl || memorial.deceasedPhotoUrl;
+  const registerUrl = getAdminUrl('/register');
+  const publicHomeUrl = getPublicUrl('/');
+  const biography = memorial.biography as unknown as {
+    sections?: Array<{ heading?: string; body?: string }>;
+    timeline?: Array<{ id?: string; year?: string; title?: string; description?: string }>;
+  } | undefined;
+  const biographySections = Array.isArray(biography?.sections) ? biography.sections : [];
+  const biographyTimeline = Array.isArray(biography?.timeline) ? biography.timeline : [];
 
   return (
     <div
@@ -141,6 +151,22 @@ export default function MemorialPage() {
           Private preview · This memorial is not public
         </div>
       )}
+      {memorial.isDemo && (
+        <div className="sticky top-0 z-50 border-b border-[var(--brand-accent)]/25 bg-[var(--brand-primary)]/95 px-4 py-3 text-[var(--brand-secondary)] shadow-lg backdrop-blur">
+          <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm">
+              <span className="font-semibold text-[var(--brand-accent)]">Memory Connect demonstration.</span>{' '}
+              Sample content, sanitized locations and demo contact details.
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+              <a href={registerUrl} className="rounded-full bg-[var(--brand-accent)] px-4 py-2 text-[var(--brand-primary)]">Create Funeral Home Account</a>
+              <a href="mailto:care@example.co.za?subject=Memory%20Connect%20demo" className="rounded-full border border-white/20 px-4 py-2">Book a Demo</a>
+              <a href={publicHomeUrl} className="rounded-full border border-white/20 px-4 py-2">Return to Memory Connect</a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero */}
       <header className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[var(--brand-primary)] to-[var(--brand-background)]" />
@@ -162,6 +188,7 @@ export default function MemorialPage() {
               </div>
             )}
           </div>
+          <p className="mb-2 text-xs uppercase tracking-[0.32em] text-[var(--brand-accent)]">In Loving Memory</p>
           <h1 className="font-display text-4xl md:text-5xl text-[var(--brand-text)] mb-3">
             {memorial.deceasedName}
           </h1>
@@ -282,6 +309,28 @@ export default function MemorialPage() {
             ) : (
               <p className="text-center text-[var(--brand-text)]/45 py-8 text-sm">Obituary not yet available</p>
             )}
+            {biographySections.length > 0 && (
+              <div className="mt-8 space-y-5">
+                {biographySections.map((section) => (
+                  <section key={section.heading} className="rounded-lg border border-white/5 bg-white/[0.03] p-5">
+                    {section.heading && <h2 className="font-display text-2xl text-[var(--brand-accent)]">{section.heading}</h2>}
+                    {section.body && <p className="mt-2 text-sm leading-7 text-[var(--brand-text)]/78">{section.body}</p>}
+                  </section>
+                ))}
+              </div>
+            )}
+            {biographyTimeline.length > 0 && (
+              <div className="mt-8 border-l border-[var(--brand-accent)]/30 pl-5">
+                {biographyTimeline.map((item) => (
+                  <article key={item.id || `${item.year}-${item.title}`} className="relative mb-5">
+                    <span className="absolute -left-[1.72rem] top-1 h-3 w-3 rounded-full bg-[var(--brand-accent)]" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-accent)]">{item.year}</p>
+                    <h3 className="mt-1 font-display text-xl">{item.title}</h3>
+                    {item.description && <p className="mt-1 text-sm leading-6 text-[var(--brand-text)]/65">{item.description}</p>}
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -292,9 +341,12 @@ export default function MemorialPage() {
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {memorial.photos.map((photo) => (
-                  <div key={photo.id} className="aspect-square bg-white/5 rounded-lg overflow-hidden">
-                    <img src={photoUrl(photo.url)} alt={photo.caption || ''} className="w-full h-full object-cover" />
-                  </div>
+                  <figure key={photo.id} className="overflow-hidden rounded-lg bg-white/5">
+                    <div className="aspect-square">
+                      <img src={photoUrl(photo.url)} alt={photo.caption || `Memorial photograph for ${memorial.deceasedName}`} className="w-full h-full object-cover" />
+                    </div>
+                    {photo.caption && <figcaption className="px-3 py-2 text-xs leading-5 text-[var(--brand-text)]/60">{photo.caption}</figcaption>}
+                  </figure>
                 ))}
               </div>
             )}
@@ -358,6 +410,10 @@ export default function MemorialPage() {
         {activeSection === 'tributes' && memorial.settings.showTributeWall !== false && (
           <TributeSection slug={memorial.slug} tributes={memorial.tributes} />
         )}
+
+        {activeSection === 'feedback' && (
+          <FuneralFeedbackSection slug={memorial.slug} />
+        )}
       </div>
 
       {/* Footer */}
@@ -376,7 +432,212 @@ export default function MemorialPage() {
         {brand.copyrightText && <p className="mt-1">{brand.copyrightText}</p>}
         <p className="mt-1">Powered by Memory Connect</p>
       </footer>
+      {memorial.isDemo && (
+        <aside className="fixed inset-x-3 bottom-3 z-40 mx-auto max-w-3xl rounded-2xl border border-[var(--brand-accent)]/30 bg-[var(--brand-primary)]/95 p-3 text-[var(--brand-secondary)] shadow-2xl backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm"><span className="font-semibold text-[var(--brand-accent)]">R299.99</span> per published funeral</p>
+            <div className="flex gap-2">
+              <a href={registerUrl} className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--brand-accent)] px-4 py-2 text-xs font-semibold text-[var(--brand-primary)] sm:flex-none">
+                Create Account <ArrowRight size={14} />
+              </a>
+              <Link to="/" className="inline-flex flex-1 items-center justify-center rounded-full border border-white/15 px-4 py-2 text-xs font-semibold sm:flex-none">
+                Landing Page
+              </Link>
+            </div>
+          </div>
+        </aside>
+      )}
     </div>
+  );
+}
+
+function StarRating({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
+  return (
+    <div>
+      <p className="text-sm font-medium text-[var(--brand-text)] mb-2">{label}</p>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => onChange(star)}
+            className={`p-1 transition ${
+              star <= value ? 'text-[var(--brand-accent)]' : 'text-white/20'
+            }`}
+          >
+            <Star size={24} fill={star <= value ? 'currentColor' : 'none'} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FuneralFeedbackSection({ slug }: { slug: string }) {
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
+  const [overallRating, setOverallRating] = useState(0);
+  const [staffRating, setStaffRating] = useState(0);
+  const [organisationRating, setOrganisationRating] = useState(0);
+  const [venueRating, setVenueRating] = useState(0);
+  const [recommend, setRecommend] = useState<boolean | null>(null);
+  const [useAgain, setUseAgain] = useState<boolean | null>(null);
+  const [comments, setComments] = useState('');
+  const [allowContact, setAllowContact] = useState(false);
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (overallRating === 0) {
+      setError('Please rate your overall experience');
+      return;
+    }
+    try {
+      await api.submitFeedback(slug, {
+        overallRating,
+        staffRating: staffRating || null,
+        organisationRating: organisationRating || null,
+        venueRating: venueRating || null,
+        recommend,
+        useAgain,
+        comments: comments || null,
+        allowContact,
+        name: allowContact ? contactName : null,
+        phone: allowContact ? contactPhone : null,
+        email: allowContact ? contactEmail || null : null,
+      });
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit feedback');
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="bg-white/5 rounded-xl p-8 text-center">
+        <Star size={40} className="mx-auto mb-4 text-[var(--brand-accent)]" />
+        <h2 className="font-display text-2xl text-[var(--brand-text)] mb-2">Thank You</h2>
+        <p className="text-[var(--brand-text)]/70 text-sm">
+          Your feedback has been submitted. We appreciate your time and input.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6 bg-white/5 rounded-xl p-6">
+      <div>
+        <h2 className="font-display text-2xl text-[var(--brand-text)] mb-1">Funeral Feedback</h2>
+        <p className="text-sm text-[var(--brand-text)]/60">Help us improve our services by sharing your experience.</p>
+      </div>
+
+      {error && <p className="text-red-400 text-sm">{error}</p>}
+
+      <StarRating value={overallRating} onChange={setOverallRating} label="Overall Experience" />
+      <StarRating value={staffRating} onChange={setStaffRating} label="Staff Professionalism" />
+      <StarRating value={organisationRating} onChange={setOrganisationRating} label="Organisation" />
+      <StarRating value={venueRating} onChange={setVenueRating} label="Venue" />
+
+      <div>
+        <p className="text-sm font-medium text-[var(--brand-text)] mb-2">Would you recommend this funeral home?</p>
+        <div className="flex gap-3">
+          {[{ value: true, label: 'Yes' }, { value: null, label: 'Maybe' }, { value: false, label: 'No' }].map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              onClick={() => setRecommend(option.value)}
+              className={`px-4 py-2 rounded-lg text-sm transition ${
+                recommend === option.value
+                  ? 'bg-[var(--brand-accent)] text-[var(--brand-primary)]'
+                  : 'bg-white/5 text-[var(--brand-text)]/60 hover:bg-white/10'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-sm font-medium text-[var(--brand-text)] mb-2">Would you use this funeral home again?</p>
+        <div className="flex gap-3">
+          {[{ value: true, label: 'Yes' }, { value: null, label: 'Maybe' }, { value: false, label: 'No' }].map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              onClick={() => setUseAgain(option.value)}
+              className={`px-4 py-2 rounded-lg text-sm transition ${
+                useAgain === option.value
+                  ? 'bg-[var(--brand-accent)] text-[var(--brand-primary)]'
+                  : 'bg-white/5 text-[var(--brand-text)]/60 hover:bg-white/10'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium text-[var(--brand-text)] block mb-2">Comments</label>
+        <textarea
+          value={comments}
+          onChange={(e) => setComments(e.target.value)}
+          placeholder="Share your thoughts about the funeral service..."
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm min-h-24 resize-y focus:outline-none focus:border-[var(--brand-accent)]"
+          maxLength={2000}
+        />
+        <p className="text-xs text-[var(--brand-text)]/40 mt-1">{comments.length}/2000</p>
+      </div>
+
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={allowContact}
+          onChange={(e) => setAllowContact(e.target.checked)}
+          className="mt-1 accent-[var(--brand-accent)]"
+        />
+        <span className="text-sm text-[var(--brand-text)]/80">May the funeral home contact me?</span>
+      </label>
+
+      {allowContact && (
+        <div className="space-y-3 pl-7">
+          <input
+            type="text"
+            value={contactName}
+            onChange={(e) => setContactName(e.target.value)}
+            placeholder="Your name"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-[var(--brand-accent)]"
+            required
+          />
+          <input
+            type="tel"
+            value={contactPhone}
+            onChange={(e) => setContactPhone(e.target.value)}
+            placeholder="Phone number"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-[var(--brand-accent)]"
+            required
+          />
+          <input
+            type="email"
+            value={contactEmail}
+            onChange={(e) => setContactEmail(e.target.value)}
+            placeholder="Email (optional)"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-[var(--brand-accent)]"
+          />
+        </div>
+      )}
+
+      <button
+        type="submit"
+        className="w-full py-3 bg-[var(--brand-accent)] text-[var(--brand-primary)] rounded-lg text-sm font-medium transition"
+      >
+        Submit Feedback
+      </button>
+    </form>
   );
 }
 

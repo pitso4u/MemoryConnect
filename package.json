@@ -19,7 +19,9 @@
     "db:push": "npm run db:push -w @memorialconnect/api",
     "memorials:expire": "tsx scripts/expire-public-memorials.ts",
     "memorials:delete": "tsx scripts/delete-expired-memorials.ts",
-    "memorials:delete-videos": "tsx scripts/delete-expired-videos.ts"
+    "memorials:delete-videos": "tsx scripts/delete-expired-videos.ts",
+    "seed:demo": "npm run seed:demo -w @memorialconnect/api",
+    "reset:demo": "npm run reset:demo -w @memorialconnect/api"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.19.1",

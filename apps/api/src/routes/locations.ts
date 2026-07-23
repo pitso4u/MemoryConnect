@@ -37,6 +37,7 @@ router.post('/', authenticate, async (req, res) => {
   try {
     const memorial = await ownedMemorial(req);
     if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+    if (memorial.isDemo && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return res.status(403).json({ success: false, error: 'Only a platform owner can update demo locations.' });
     if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return res.status(423).json({ success: false, error: 'This funeral programme is locked because it has already been published and shared.' });
     const memorialId = memorial.id;
 
@@ -76,6 +77,7 @@ router.patch('/:locationId', authenticate, async (req, res) => {
     if (isFamilyRole(req.user!.role)) {
       return res.status(403).json({ success: false, error: 'Family users cannot modify approved locations' });
     }
+    if (memorial.isDemo && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return res.status(403).json({ success: false, error: 'Only a platform owner can update demo locations.' });
     if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return res.status(423).json({ success: false, error: 'This funeral programme is locked because it has already been published and shared.' });
     const memorialId = memorial.id;
 
@@ -108,6 +110,7 @@ router.delete('/:locationId', authenticate, async (req, res) => {
   if (isFamilyRole(req.user!.role)) {
     return res.status(403).json({ success: false, error: 'Family users cannot delete locations' });
   }
+  if (memorial.isDemo && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return res.status(403).json({ success: false, error: 'Only a platform owner can update demo locations.' });
   if (isEditLocked(memorial) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return res.status(423).json({ success: false, error: 'This funeral programme is locked because it has already been published and shared.' });
   const memorialId = memorial.id;
 

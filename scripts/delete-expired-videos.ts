@@ -5,7 +5,7 @@ import { removeMemorialFiles } from '../apps/api/src/lib/retention';
 async function main() {
   const cutoff = addDays(new Date(), -30);
   const memorials = await prisma.memorial.findMany({
-    where: { publishedAt: { lt: cutoff }, videosDeletedAt: null, deletedAt: null },
+    where: { publishedAt: { lt: cutoff }, videosDeletedAt: null, deletedAt: null, isDemo: false },
     select: { id: true, storageBytes: true },
   });
   let filesDeleted = 0;

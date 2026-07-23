@@ -41,6 +41,7 @@ export default function DashboardLayout() {
   const navigation = platformOwner ? platformNavigation : isFamilyRole(user?.role) ? familyNavigation : funeralHomeNavigation;
   const portalLabel = platformOwner ? 'Platform Owner' : isFamilyRole(user?.role) ? 'Family Portal' : 'Admin Portal';
   const portalName = platformOwner ? 'Memory Connect' : brand.tradingName || brand.companyName;
+  const portalLogo = platformOwner ? '/brand/memory-connect-logo-horizontal.png' : brand.logoUrl;
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
@@ -105,7 +106,7 @@ export default function DashboardLayout() {
 
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-[var(--brand-primary)] text-[var(--brand-secondary)] md:flex">
         <div className="border-b border-white/10 p-6">
-          {brand.logoUrl ? <img src={brand.logoUrl} alt={`${brand.companyName} logo`} className="mb-3 max-h-12 max-w-44 object-contain" /> : null}
+          {portalLogo ? <img src={portalLogo} alt={`${portalName} logo`} className="mb-3 max-h-12 max-w-44 rounded bg-white/95 p-1 object-contain" /> : null}
           <h1 className="font-display text-xl">{portalName}</h1>
           <p className="mt-1 text-xs text-parchment/50">{portalLabel}</p>
           {!platformOwner && !brand.whiteLabelEnabled && <p className="mt-1 text-[11px] text-parchment/35">Powered by Memory Connect</p>}

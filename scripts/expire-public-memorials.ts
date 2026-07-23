@@ -5,6 +5,7 @@ async function main() {
   const result = await prisma.memorial.updateMany({
     where: {
       status: { in: [MEMORIAL_STATUS.PUBLISHED, MEMORIAL_STATUS.LOCKED] },
+      isDemo: false,
       publicExpiresAt: { lt: new Date() },
       deletedAt: null,
     },

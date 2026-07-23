@@ -73,6 +73,7 @@ export interface PublicMemorial extends Omit<Memorial, 'funeralHome'> {
   photos: Photo[];
   tributes: Tribute[];
   locations: MemorialLocation[];
+  isDemo?: boolean;
 }
 
 export interface ProjectorData {
@@ -101,4 +102,23 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  submitFeedback: (slug: string, data: FuneralFeedbackInput) =>
+    request<{ id: string }>(`/api/v1/public/memorials/${slug}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
+
+export interface FuneralFeedbackInput {
+  overallRating: number;
+  staffRating?: number | null;
+  organisationRating?: number | null;
+  venueRating?: number | null;
+  recommend?: boolean | null;
+  useAgain?: boolean | null;
+  comments?: string | null;
+  allowContact?: boolean;
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}

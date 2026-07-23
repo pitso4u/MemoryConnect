@@ -32,6 +32,8 @@ export function removeMemorialFiles(memorialId: string, onlyVideos = false) {
 }
 
 export async function permanentlyDeleteMemorial(memorialId: string) {
+  const memorial = await prisma.memorial.findUnique({ where: { id: memorialId }, select: { isDemo: true } });
+  if (memorial?.isDemo) throw new Error('Demo memorials cannot be permanently deleted by retention jobs.');
   const removed = removeMemorialFiles(memorialId);
   await prisma.$transaction(async (tx) => {
     await tx.memorial.update({ where: { id: memorialId }, data: { paymentId: null } });

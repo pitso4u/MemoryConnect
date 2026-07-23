@@ -39,8 +39,9 @@ export default function HomePage() {
     <div className="marketing-page min-h-screen bg-parchment text-ink">
       <header className="absolute inset-x-0 top-0 z-20">
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-6 sm:px-8 lg:px-12" aria-label="Main navigation">
-          <a href="#top" className="font-display text-2xl font-semibold tracking-tight text-parchment">
-            Memory Connect
+          <a href="#top" className="flex items-center gap-3 text-parchment">
+            <img src="/brand/memory-connect-emblem.png" alt="" className="h-10 w-10 rounded-full bg-white object-contain p-1.5" />
+            <span className="font-display text-2xl font-semibold tracking-tight">Memory Connect</span>
           </a>
           <div className="hidden items-center gap-8 text-sm text-parchment/70 md:flex">
             <a href="#how-it-works" className="transition hover:text-parchment">How it works</a>
@@ -49,9 +50,14 @@ export default function HomePage() {
           </div>
           <a
             href={registerUrl}
-            className="rounded-full border border-parchment/30 px-4 py-2 text-sm font-medium text-parchment transition hover:border-gold hover:bg-gold hover:text-ink"
+            className="inline-flex items-center gap-2 rounded-full border border-parchment/30 px-4 py-2 text-sm font-medium text-parchment transition hover:border-gold hover:bg-gold hover:text-ink"
           >
-            For funeral homes
+            <img
+              src="/brand/memory-connect-logo-full.png"
+              alt="Memory Connect funeral home logo"
+              className="h-8 w-auto object-contain"
+            />
+            <span className="hidden sm:inline">For funeral homes</span>
           </a>
         </nav>
       </header>
@@ -62,11 +68,13 @@ export default function HomePage() {
           <div className="hero-grain absolute inset-0 opacity-40" />
           <div className="relative mx-auto grid min-h-[860px] max-w-7xl items-center gap-16 px-5 pb-20 pt-36 sm:px-8 lg:grid-cols-[1.15fr_0.85fr] lg:px-12 lg:pt-32">
             <div className="max-w-3xl">
-              <img
-                src="/memory-connect-logo.png"
-                alt="Memory Connect"
-                className="mb-8 h-24 w-24 rounded-2xl bg-white object-cover shadow-xl shadow-black/25 ring-1 ring-white/20 sm:h-28 sm:w-28"
-              />
+              <div className="mb-8 inline-flex rounded-2xl bg-white/95 px-5 py-4 shadow-xl shadow-black/25 ring-1 ring-white/20">
+                <img
+                  src="/brand/memory-connect-logo-horizontal.png"
+                  alt="Memory Connect"
+                  className="h-auto w-56 object-contain sm:w-72"
+                />
+              </div>
               <p className="animate-fade-up mb-7 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.24em] text-gold-light">
                 <span className="h-px w-10 bg-gold" />
                 Made for South African funeral homes
@@ -184,9 +192,14 @@ export default function HomePage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gold-light">Pay per funeral</p>
                 <p className="mt-6 font-display text-6xl font-semibold tracking-tight sm:text-8xl">R299.99</p>
                 <p className="mt-3 text-lg text-parchment/55">per published funeral</p>
-                <a href={registerUrl} className="group mt-8 inline-flex items-center gap-2 rounded-full bg-gold px-7 py-3.5 font-semibold text-ink transition hover:bg-gold-light">
-                  Create Funeral Home Account <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
-                </a>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <a href={registerUrl} className="group inline-flex items-center justify-center gap-2 rounded-full bg-gold px-7 py-3.5 font-semibold text-ink transition hover:bg-gold-light">
+                    Create Funeral Home Account <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
+                  </a>
+                  <Link to="/demo" className="inline-flex items-center justify-center gap-2 rounded-full border border-parchment/25 px-7 py-3.5 font-medium text-parchment transition hover:border-parchment/60 hover:bg-white/5">
+                    View Demo Memorial
+                  </Link>
+                </div>
               </div>
               <div className="border-t border-white/10 pt-8 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
                 <h3 className="font-display text-3xl">Publish each funeral for R299.99</h3>
@@ -211,6 +224,9 @@ export default function HomePage() {
               Get started with Memory Connect
               <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
             </a>
+            <Link to="/demo" className="mt-4 inline-flex items-center gap-2 rounded-full border border-ink/25 px-7 py-3 text-sm font-semibold text-ink transition hover:bg-ink/10">
+              Explore the full demo
+            </Link>
           </div>
         </section>
       </main>
@@ -218,7 +234,7 @@ export default function HomePage() {
       <footer className="bg-ink px-5 py-10 text-parchment sm:px-8 lg:px-12">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 border-t border-white/10 pt-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="font-display text-2xl font-semibold">Memory Connect</p>
+            <img src="/brand/memory-connect-logo-horizontal.png" alt="Memory Connect" className="h-auto w-52 rounded bg-white/95 p-2" />
             <p className="mt-2 text-sm text-parchment/40">Digital memories, thoughtfully connected.</p>
           </div>
           <div className="flex gap-6 text-sm text-parchment/50">

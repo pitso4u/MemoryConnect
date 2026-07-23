@@ -62,6 +62,10 @@ router.post('/', authenticate, (req, res) => {
       if (!memorial) {
         return res.status(404).json({ success: false, error: 'Memorial not found' });
       }
+      if (memorial.isDemo && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') {
+        for (const file of (req.files as Express.Multer.File[]) || []) if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        return res.status(403).json({ success: false, error: 'Only a platform owner can update demo media.' });
+      }
 
       const files = req.files as Express.Multer.File[];
       if (!files?.length) {
@@ -125,6 +129,9 @@ router.delete('/:photoId', authenticate, async (req, res) => {
 
     if (!memorial) {
       return res.status(404).json({ success: false, error: 'Memorial not found' });
+    }
+    if (memorial.isDemo && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Only a platform owner can update demo media.' });
     }
 
     const photo = await prisma.photo.findFirst({

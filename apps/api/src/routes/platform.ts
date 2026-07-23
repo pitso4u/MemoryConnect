@@ -54,9 +54,9 @@ router.get('/summary', async (_req, res) => {
   const [homes, users, memorials, payments, views] = await Promise.all([
     prisma.funeralHome.findMany({ select: { id: true, status: true, createdAt: true } }),
     prisma.user.findMany({ select: { role: true, passwordSetAt: true } }),
-    prisma.memorial.findMany({ select: { status: true, editLocksAt: true, publicExpiresAt: true, deletedAt: true, publishedAt: true } }),
+    prisma.memorial.findMany({ where: { isDemo: false }, select: { status: true, editLocksAt: true, publicExpiresAt: true, deletedAt: true, publishedAt: true } }),
     prisma.payment.findMany({ select: { amountCents: true, status: true, paidAt: true, createdAt: true } }),
-    prisma.memorialView.count(),
+    prisma.memorialView.count({ where: { memorial: { isDemo: false } } }),
   ]);
   const successful = payments.filter((payment) => isSuccessful(payment.status));
   const revenue = (from?: Date) => successful
@@ -194,9 +194,10 @@ router.get('/support', async (_req, res) => {
 router.get('/analytics', async (_req, res) => {
   const today = startOfToday();
   const [totalViews, viewsToday, memorials, homes] = await Promise.all([
-    prisma.memorialView.count(),
-    prisma.memorialView.count({ where: { createdAt: { gte: today } } }),
+    prisma.memorialView.count({ where: { memorial: { isDemo: false } } }),
+    prisma.memorialView.count({ where: { createdAt: { gte: today }, memorial: { isDemo: false } } }),
     prisma.memorial.findMany({
+      where: { isDemo: false },
       select: { id: true, deceasedName: true, slug: true, viewCount: true, funeralHome: { select: { id: true, name: true } } },
       orderBy: { viewCount: 'desc' },
       take: 10,
@@ -290,6 +291,7 @@ router.delete('/memorials/:id', async (req, res) => {
   if (req.body?.confirmed !== true) return res.status(400).json({ success: false, error: 'Explicit confirmation is required' });
   const memorial = await prisma.memorial.findUnique({ where: { id: req.params.id } });
   if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+  if (memorial.isDemo) return res.status(403).json({ success: false, error: 'The permanent demo memorial cannot be deleted from this screen. Use the demo seed to reset it.' });
   await audit(req.user!.userId, 'MEMORIAL_DELETED', 'MEMORIAL', memorial.id, memorial.funeralHomeId, { deceasedName: memorial.deceasedName });
   await prisma.memorial.delete({ where: { id: memorial.id } });
   res.json({ success: true, data: null });

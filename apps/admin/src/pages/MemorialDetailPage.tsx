@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, FamilyAccess, FamilyInvitation, MemorialAnalytics, MemorialDetail, ProgrammeItem } from '../lib/api';
 import MemorialQrCode from '../components/MemorialQrCode';
+import FuneralFeedbackPanel from '../components/memorial/FuneralFeedbackPanel';
 import { MemorialHeader } from '../components/memorial/MemorialHeader';
 import { ProjectorControls } from '../components/memorial/ProjectorControls';
 import { ProgrammeEditor } from '../components/memorial/ProgrammeEditor';
@@ -9,12 +10,12 @@ import { PhotoManager } from '../components/memorial/PhotoManager';
 import { ObituaryEditor } from '../components/memorial/ObituaryEditor';
 import { TributeViewer } from '../components/memorial/TributeViewer';
 import { LocationManager } from '../components/memorial/LocationManager';
-import { BarChart3, Copy, ExternalLink, Eye, FileText, Image, Lock, Mail, MapPinned, MessageSquare, Send, UserPlus } from 'lucide-react';
+import { BarChart3, Copy, ExternalLink, Eye, FileText, Image, Lock, Mail, MapPinned, MessageSquare, Send, Star, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBrand } from '../context/BrandContext';
 import { memorialPageUrl } from '../lib/config';
 
-type DetailTab = 'programme' | 'obituary' | 'photos' | 'locations' | 'tributes';
+type DetailTab = 'programme' | 'obituary' | 'photos' | 'locations' | 'tributes' | 'feedback';
 
 function isFamilyRole(role?: string) {
   return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
@@ -489,6 +490,7 @@ export default function MemorialDetailPage({ initialTab = 'programme' }: { initi
           { key: 'photos', label: 'Photos', icon: Image },
           { key: 'locations', label: 'Locations & Directions', icon: MapPinned },
           { key: 'tributes', label: 'Tributes', icon: MessageSquare },
+          { key: 'feedback', label: 'Funeral Feedback', icon: Star },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -550,6 +552,10 @@ export default function MemorialDetailPage({ initialTab = 'programme' }: { initi
 
       {activeTab === 'tributes' && (
         <TributeViewer tributes={memorial.tributes} />
+      )}
+
+      {activeTab === 'feedback' && (
+        <FuneralFeedbackPanel id={memorial.id} />
       )}
       </div>
 

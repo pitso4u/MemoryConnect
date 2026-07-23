@@ -81,9 +81,10 @@ router.post('/memorials/:id/invitations', authenticate, async (req, res) => {
     const memorialId = param(req, 'id');
     const memorial = await prisma.memorial.findFirst({
       where: { id: memorialId, funeralHomeId: req.user!.funeralHomeId, deletedAt: null },
-      select: { id: true, funeralHomeId: true },
+      select: { id: true, funeralHomeId: true, isDemo: true },
     });
     if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+    if (memorial.isDemo) return res.status(403).json({ success: false, error: 'Family invitations are disabled for the demo memorial' });
 
     const body = inviteSchema.parse(req.body);
     const token = crypto.randomBytes(32).toString('base64url');
@@ -227,6 +228,7 @@ router.get('/memorials/:id/invitations', authenticate, async (req, res) => {
   const memorialId = param(req, 'id');
   const memorial = await prisma.memorial.findFirst({ where: { id: memorialId, funeralHomeId: req.user!.funeralHomeId } });
   if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
+  if (memorial.isDemo) return res.status(403).json({ success: false, error: 'Family invitations are disabled for the demo memorial' });
 
   const invitations = await prisma.familyInvitation.findMany({
     where: { memorialId },
@@ -274,7 +276,7 @@ router.post('/memorials/:id/invitations/:invitationId/resend', authenticate, asy
   const memorialId = param(req, 'id');
   const invitationId = param(req, 'invitationId');
   const invitation = await prisma.familyInvitation.findFirst({
-    where: { id: invitationId, memorialId, funeralHomeId: req.user!.funeralHomeId },
+    where: { id: invitationId, memorialId, funeralHomeId: req.user!.funeralHomeId, memorial: { isDemo: false } },
   });
   if (!invitation) return res.status(404).json({ success: false, error: 'Invitation not found' });
   const token = invitation.token || crypto.randomBytes(32).toString('base64url');
@@ -298,7 +300,7 @@ router.delete('/memorials/:id/invitations/:invitationId', authenticate, async (r
   const memorialId = param(req, 'id');
   const invitationId = param(req, 'invitationId');
   const invitation = await prisma.familyInvitation.findFirst({
-    where: { id: invitationId, memorialId, funeralHomeId: req.user!.funeralHomeId },
+    where: { id: invitationId, memorialId, funeralHomeId: req.user!.funeralHomeId, memorial: { isDemo: false } },
   });
   if (!invitation) return res.status(404).json({ success: false, error: 'Invitation not found' });
   await prisma.$transaction([

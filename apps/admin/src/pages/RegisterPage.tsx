@@ -15,6 +15,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const { brand } = useBrand();
+  const defaultLogo = !brand.whiteLabelEnabled && !brand.logoUrl ? '/brand/memory-connect-logo-horizontal.png' : null;
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,7 +37,7 @@ export default function RegisterPage() {
     <div className="brand-surface min-h-screen flex items-center justify-center px-6 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          {brand.logoUrl && <img src={brand.logoUrl} alt={`${brand.companyName} logo`} className="mx-auto mb-4 max-h-14 max-w-48 object-contain" />}
+          {(brand.logoUrl || defaultLogo) && <img src={brand.logoUrl || defaultLogo || ''} alt={`${brand.companyName} logo`} className="mx-auto mb-4 max-h-14 max-w-48 rounded bg-white/95 p-1.5 object-contain" />}
           <h1 className="font-display text-3xl text-ink">{brand.whiteLabelEnabled ? 'Create your branded portal' : 'Memory Connect'}</h1>
           <p className="text-muted mt-2">Register your funeral home</p>
         </div>

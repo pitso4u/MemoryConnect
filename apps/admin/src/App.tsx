@@ -84,6 +84,7 @@ function AppRoutes() {
         <Route path="family/memorials/:id/photos" element={<FamilyOnly><MemorialDetailPage initialTab="photos" /></FamilyOnly>} />
         <Route path="family/memorials/:id/locations" element={<FamilyOnly><MemorialDetailPage initialTab="locations" /></FamilyOnly>} />
         <Route path="family/memorials/:id/tributes" element={<FamilyOnly><MemorialDetailPage initialTab="tributes" /></FamilyOnly>} />
+        <Route path="family/memorials/:id/feedback" element={<FamilyOnly><MemorialDetailPage initialTab="feedback" /></FamilyOnly>} />
         <Route path="family/memorials/:id/biography" element={<FamilyOnly><MemorialDetailPage initialTab="obituary" /></FamilyOnly>} />
         <Route path="family/memorials/:id/programme-suggestions" element={<FamilyOnly><MemorialDetailPage initialTab="programme" /></FamilyOnly>} />
         <Route path="family/memorials/:id/preview" element={<FamilyOnly><MemorialDetailPage /></FamilyOnly>} />

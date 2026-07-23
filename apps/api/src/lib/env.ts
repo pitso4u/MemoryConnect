@@ -35,6 +35,11 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_WINDOW_MS: z.string().transform(Number).pipe(z.number().int().positive()).default('900000'),
   AUTH_RATE_LIMIT_MAX: z.string().transform(Number).pipe(z.number().int().positive()).optional(),
   MEMORIAL_EDIT_LOCK_HOURS: z.string().transform(Number).pipe(z.number().int().positive()).default('72'),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().transform(Number).pipe(z.number().int().positive()).default('587'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
 });
 
 export function validateEnv() {

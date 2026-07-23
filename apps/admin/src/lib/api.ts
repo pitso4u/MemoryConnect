@@ -12,6 +12,9 @@ import type {
   PublishPayment,
   BrandProfile,
   FuneralHome,
+  FuneralFeedback,
+  FuneralFeedbackSummary,
+  FuneralContactEnquiry,
 } from '@memorialconnect/shared';
 
 const API_URL = getApiUrl();
@@ -274,6 +277,23 @@ export const api = {
     request<PlatformPayment>(`/api/v1/platform/payments/${id}/verify`, { method: 'POST', body: JSON.stringify({ confirmed: true }) }),
   deletePlatformMemorial: (id: string) =>
     request<null>(`/api/v1/platform/memorials/${id}`, { method: 'DELETE', body: JSON.stringify({ confirmed: true }) }),
+
+  // ── Funeral Feedback ─────────────────────────────────────────────────────
+
+  getMemorialFeedback: (id: string) =>
+    request<FuneralFeedback[]>(`/api/v1/admin/memorials/${id}/feedback`),
+
+  getMemorialFeedbackSummary: (id: string) =>
+    request<FuneralFeedbackSummary>(`/api/v1/admin/memorials/${id}/feedback/summary`),
+
+  updateFeedbackContactStatus: (memorialId: string, feedbackId: string, contactStatus: 'NEW' | 'CONTACTED' | 'CLOSED') =>
+    request<FuneralFeedback>(`/api/v1/admin/memorials/${memorialId}/feedback/${feedbackId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ contactStatus }),
+    }),
+
+  getContactEnquiries: () =>
+    request<{ enquiries: FuneralContactEnquiry[]; summary: { NEW: number; CONTACTED: number; CLOSED: number; total: number; thisMonth: number } }>('/api/v1/admin/contact-enquiries'),
 };
 
 interface MemorialDetail extends Memorial {
@@ -487,4 +507,7 @@ export type {
   PublishPayment,
   BrandProfile,
   FuneralHome,
+  FuneralFeedback,
+  FuneralFeedbackSummary,
+  FuneralContactEnquiry,
 };

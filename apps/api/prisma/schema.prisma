@@ -137,6 +137,7 @@ model Memorial {
   familyInvitations      FamilyInvitation[]
   accessGrants           MemorialAccess[]
   auditLogs              MemorialAuditLog[]
+  feedback               FuneralFeedback[]
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
@@ -195,6 +196,29 @@ model MemorialAccess {
   @@unique([memorialId, userId])
   @@index([userId])
   @@index([memorialId])
+}
+
+model FuneralFeedback {
+  id                 String   @id @default(cuid())
+  memorialId         String
+  memorial           Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  overallRating      Int
+  staffRating        Int?
+  organisationRating Int?
+  venueRating        Int?
+  recommend          Boolean?
+  useAgain           Boolean?
+  comments           String?
+  allowContact       Boolean  @default(false)
+  name               String?
+  phone              String?
+  email              String?
+  contactStatus      String   @default("NEW")
+  contactedAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([memorialId, createdAt])
 }
 
 model MemorialAuditLog {
