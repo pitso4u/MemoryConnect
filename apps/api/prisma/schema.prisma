@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -14,9 +15,11 @@ model FuneralHome {
   phone                    String?
   address                  String?
   tradingName              String?
+  slug                     String?        @unique
   logoUrl                  String?
   iconUrl                  String?
   plan                     String         @default("professional")
+  edition                  String         @default("MEMORIAL")
   primaryColor             String?
   secondaryColor           String?
   accentColor              String?
@@ -49,6 +52,12 @@ model FuneralHome {
   analyticsAccessEnabled   Boolean        @default(true)
   apiAccessEnabled         Boolean        @default(false)
   dedicatedSupportEnabled  Boolean        @default(false)
+  trialStartsAt            DateTime?
+  trialEndsAt              DateTime?
+  trialMemorialsUsed       Int            @default(0)
+  memorialCreditsPurchased Int            @default(0)
+  memorialCreditsRemaining Int            @default(0)
+  lastCreditPurchaseAt     DateTime?
   status                   String         @default("ACTIVE")
   suspendedAt              DateTime?
   createdAt                DateTime       @default(now())
@@ -62,6 +71,19 @@ model FuneralHome {
   usageLedger              UsageLedger[]
   familyInvitations        FamilyInvitation[]
   platformAuditLogs        PlatformAuditLog[]
+  marketingContact         MarketingContact?
+  brochureCategories       BrochureCategory[]
+  brochures                Brochure[]
+  promotions               Promotion[]
+  enquiries                Enquiry[]
+  qrCodes                  QRCode[]
+  shortLinks               ShortLink[]
+  analyticsEvents          AnalyticsEvent[]
+  vehicles                 Vehicle[]
+  assets                   Asset[]
+  funeralResourceReservations FuneralResourceReservation[]
+  featureOverrides         FuneralHomeFeature[]
+  creditPurchases          CreditPurchase[]
 }
 
 model Branch {
@@ -72,8 +94,19 @@ model Branch {
   phone         String?
   email         String?
   address       String?
+  city          String?
+  province      String?
+  country       String?      @default("South Africa")
+  latitude      Float?
+  longitude     Float?
+  whatsapp      String?
+  manager       String?
+  businessHours String?
+  googleMapsUrl String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+
+  assets         Asset[]
 
   @@index([funeralHomeId])
 }
@@ -91,6 +124,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   auditLogs     MemorialAuditLog[]
   platformAuditLogs PlatformAuditLog[]
+  featureOverrides UserFeature[]
   passwordSetAt DateTime?
   lastLoginAt   DateTime?
   createdAt     DateTime    @default(now())
@@ -104,9 +138,12 @@ model Memorial {
   dateOfBirth           DateTime?
   dateOfDeath           DateTime?
   serviceDate           DateTime?
+  serviceEndTime        String?
   serviceVenue          String?
+  timezone              String                @default("Africa/Johannesburg")
   deceasedPhotoUrl      String?            @map("coverPhotoUrl")
   logoUrl               String?
+  qrPosterUrl           String?
   obituary              String?
   biography             Json?
   programme             Json
@@ -138,6 +175,7 @@ model Memorial {
   accessGrants           MemorialAccess[]
   auditLogs              MemorialAuditLog[]
   feedback               FuneralFeedback[]
+  funeralResourceReservations FuneralResourceReservation[]
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
@@ -256,6 +294,41 @@ model Payment {
   @@index([funeralHomeId, status, createdAt])
   @@index([memorialId, createdAt])
   @@map("MemorialPayment")
+}
+
+// Prepaid memorial credit purchases (Memorial Credit Wallet). Each credit
+// represents the right to publish one memorial without a further per-memorial
+// Paystack charge. Purchase success is idempotently applied in the webhook.
+model CreditPurchase {
+  id                 String      @id @default(cuid())
+  funeralHomeId      String
+  funeralHome        FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  credits            Int
+  amountCents        Int
+  currency           String      @default("ZAR")
+  status             String      @default("PENDING")
+  paystackReference  String      @unique
+  paystackAccessCode String?
+  authorizationUrl   String?
+  paidAt             DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([funeralHomeId, status, createdAt])
+  @@map("CreditPurchase")
+}
+
+// Platform-wide commercial configuration. Seeded with the v1 defaults and
+// editable by the platform owner; values fall back to DEFAULT_PLATFORM_SETTINGS
+// when a key is absent.
+model PlatformSetting {
+  key       String   @id
+  value     String
+  category  String   @default("commercial")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("PlatformSetting")
 }
 
 // Retained for non-destructive migration from the previous subscription
@@ -423,4 +496,496 @@ model LoginAttempt {
 
   @@index([success, createdAt])
   @@index([email, createdAt])
+}
+
+// ── Marketing Hub Models ──────────────────────────────────────────────────
+
+model MarketingContact {
+  id              String      @id @default(cuid())
+  funeralHomeId   String      @unique
+  funeralHome     FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  businessName    String?
+  logoUrl         String?
+  coverImageUrl   String?
+  description     String?
+  address         String?
+  telephone       String?
+  mobile          String?
+  whatsapp        String?
+  email           String?
+  website         String?
+  businessHours   String?
+  googleMapsUrl   String?
+  facebook        String?
+  instagram       String?
+  tiktok          String?
+  linkedin        String?
+  enableBrochures  Boolean     @default(true)
+  enableContact    Boolean     @default(true)
+  enableBranches   Boolean     @default(true)
+  enablePromotions Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model BrochureCategory {
+  id            String      @id @default(cuid())
+  funeralHomeId String
+  funeralHome   FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  name          String
+  slug          String
+  description   String?
+  displayOrder  Int         @default(0)
+  isDefault     Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  brochures     Brochure[]
+
+  @@unique([funeralHomeId, slug])
+  @@index([funeralHomeId])
+}
+
+model Brochure {
+  id              String      @id @default(cuid())
+  funeralHomeId   String
+  funeralHome     FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  categoryId      String?
+  category        BrochureCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  title           String
+  slug            String      @unique
+  coverImageUrl   String?
+  description     String?
+  pdfUrl          String?
+  ctaEnabled      Boolean     @default(true)
+  ctaText         String?     @default("Enquire Now")
+  ctaUrl          String?
+  whatsappNumber  String?
+  phoneNumber     String?
+  emailAddress    String?
+  seoTitle        String?
+  seoDescription  String?
+  published       Boolean     @default(false)
+  featured        Boolean     @default(false)
+  displayOrder    Int         @default(0)
+  viewCount       Int         @default(0)
+  shortUrl        String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  gallery         BrochureGallery[]
+  enquiries       Enquiry[]
+  qrCodes         QRCode[]
+  analyticsEvents AnalyticsEvent[]
+
+  @@index([funeralHomeId])
+  @@index([categoryId])
+  @@index([published, displayOrder])
+}
+
+model BrochureGallery {
+  id           String   @id @default(cuid())
+  brochureId   String
+  brochure     Brochure @relation(fields: [brochureId], references: [id], onDelete: Cascade)
+  url          String
+  caption      String?
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([brochureId])
+}
+
+model Promotion {
+  id             String      @id @default(cuid())
+  funeralHomeId  String
+  funeralHome    FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  title          String
+  bannerImageUrl String?
+  description    String?
+  startDate      DateTime
+  endDate        DateTime
+  buttonText     String?
+  buttonUrl      String?
+  published      Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([funeralHomeId, published, endDate])
+}
+
+model Enquiry {
+  id            String      @id @default(cuid())
+  brochureId    String
+  brochure      Brochure    @relation(fields: [brochureId], references: [id], onDelete: Cascade)
+  funeralHomeId String
+  funeralHome   FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  fullName      String
+  phoneNumber   String?
+  emailAddress  String?
+  message       String?
+  createdAt     DateTime    @default(now())
+
+  @@index([brochureId])
+  @@index([funeralHomeId])
+  @@index([createdAt])
+}
+
+model QRCode {
+  id            String      @id @default(cuid())
+  brochureId    String?
+  brochure      Brochure?   @relation(fields: [brochureId], references: [id], onDelete: Cascade)
+  funeralHomeId String
+  funeralHome   FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  url           String
+  shortUrl      String?
+  imagePath     String?
+  scanCount     Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([brochureId])
+  @@index([funeralHomeId])
+}
+
+model ShortLink {
+  id            String       @id @default(cuid())
+  slug          String       @unique
+  targetUrl     String
+  funeralHomeId String?
+  funeralHome   FuneralHome? @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  clickCount    Int          @default(0)
+  createdAt     DateTime     @default(now())
+
+  @@index([funeralHomeId])
+}
+
+model AnalyticsEvent {
+  id            String       @id @default(cuid())
+  funeralHomeId String?
+  funeralHome   FuneralHome? @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  brochureId    String?
+  brochure      Brochure?    @relation(fields: [brochureId], references: [id], onDelete: SetNull)
+  eventType     String
+  metadata      String?
+  visitorId     String?
+  ipHash        String?
+  userAgent     String?
+  createdAt     DateTime     @default(now())
+
+  @@index([funeralHomeId, createdAt])
+  @@index([brochureId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([createdAt])
+}
+
+model Vehicle {
+  id                  String                       @id @default(cuid())
+  funeralHomeId       String
+  funeralHome         FuneralHome                  @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  name                String
+  registrationNumber  String
+  vehicleType         String
+  manufacturer        String?
+  model               String?
+  year                Int?
+  vin                 String?
+  colour              String?
+  capacity            Int?
+  currentMileage      Int?
+  fuelType            String?
+  transmission        String?
+  status              String                       @default("Available")
+  assignedDriver      String?
+  insuranceCompany    String?
+  insuranceNumber     String?
+  insuranceExpiry     DateTime?
+  roadworthyExpiry    DateTime?
+  licenseDiskExpiry   DateTime?
+  nextServiceDate     DateTime?
+  notes               String?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  photos              VehiclePhoto[]
+  documents           VehicleDocument[]
+  serviceHistories    VehicleServiceHistory[]
+  fuelLogs            VehicleFuelLog[]
+  maintenanceLogs     VehicleMaintenanceLog[]
+  reservations        FuneralResourceReservation[]
+
+  @@index([funeralHomeId])
+  @@index([status])
+  @@index([registrationNumber])
+}
+
+model VehiclePhoto {
+  id        String   @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  url       String
+  caption   String?
+  createdAt DateTime @default(now())
+
+  @@index([vehicleId])
+}
+
+model VehicleDocument {
+  id        String   @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  name      String
+  url       String
+  type      String?
+  createdAt DateTime @default(now())
+
+  @@index([vehicleId])
+}
+
+model VehicleServiceHistory {
+  id              String   @id @default(cuid())
+  vehicleId       String
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  serviceDate     DateTime
+  description     String?
+  mileageAtService Int?
+  cost            Float?
+  provider        String?
+  nextServiceDate DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@index([vehicleId])
+}
+
+model VehicleFuelLog {
+  id            String   @id @default(cuid())
+  vehicleId     String
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date          DateTime
+  amount        Float
+  cost          Float
+  mileage       Int?
+  fuelType      String?
+  station       String?
+  receiptUrl    String?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([vehicleId])
+}
+
+model VehicleMaintenanceLog {
+  id            String   @id @default(cuid())
+  vehicleId     String
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date          DateTime
+  type          String
+  description   String?
+  cost          Float?
+  provider      String?
+  mileageAtService Int?
+  nextServiceDue DateTime?
+  status        String   @default("Completed")
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([vehicleId])
+}
+
+model Asset {
+  id                String                  @id @default(cuid())
+  funeralHomeId     String
+  funeralHome       FuneralHome             @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  name              String
+  category          String
+  serialNumber      String?
+  barcodeQrCode     String?
+  purchaseDate      DateTime?
+  purchasePrice     Float?
+  supplier          String?
+  warrantyExpiry    DateTime?
+  currentLocation   String?
+  branchId          String?
+  branch            Branch?                 @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  condition         String                  @default("Good")
+  status            String                  @default("Available")
+  assignedEmployee  String?
+  notes             String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  photos            AssetPhoto[]
+  documents         AssetDocument[]
+  movementHistories AssetMovementHistory[]
+  damageReports     AssetDamageReport[]
+  reservations      FuneralResourceReservation[]
+
+  @@index([funeralHomeId])
+  @@index([branchId])
+  @@index([category])
+  @@index([status])
+}
+
+model AssetPhoto {
+  id        String   @id @default(cuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  url       String
+  caption   String?
+  createdAt DateTime @default(now())
+
+  @@index([assetId])
+}
+
+model AssetDocument {
+  id        String   @id @default(cuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  name      String
+  url       String
+  type      String?
+  createdAt DateTime @default(now())
+
+  @@index([assetId])
+}
+
+model AssetMovementHistory {
+  id          String   @id @default(cuid())
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  fromBranch  String?
+  toBranch    String?
+  fromLocation String?
+  toLocation  String?
+  movedBy     String?
+  notes       String?
+  movedAt     DateTime @default(now())
+
+  @@index([assetId])
+}
+
+model AssetDamageReport {
+  id          String   @id @default(cuid())
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  reportedBy  String?
+  date        DateTime @default(now())
+  description String
+  severity    String   @default("Minor")
+  status      String   @default("Open")
+  cost        Float?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([assetId])
+}
+
+model FuneralResourceReservation {
+  id            String      @id @default(cuid())
+  funeralHomeId String
+  funeralHome   FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  memorialId    String
+  memorial      Memorial    @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  vehicleId     String?
+  vehicle       Vehicle?    @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  assetId       String?
+  asset         Asset?      @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  quantity      Int         @default(1)
+  reservedAt    DateTime    @default(now())
+  reservedBy    String?
+  checkedInAt   DateTime?
+  checkedOutAt  DateTime?
+  returnedAt    DateTime?
+  status        String      @default("Reserved")
+  notes         String?
+
+  @@index([funeralHomeId, memorialId])
+  @@index([vehicleId])
+  @@index([assetId])
+  @@index([status])
+}
+
+model Feature {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  name            String
+  description     String?
+  category        String   @default("GENERAL")
+  releaseChannel  String   @default("INTERNAL")
+  enabledGlobally Boolean  @default(false)
+  premium         Boolean  @default(false)
+  minimumEdition  String?
+  minimumPlan     String?
+  rolloutPercent  Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  funeralHomeOverrides FuneralHomeFeature[]
+  userOverrides   UserFeature[]
+  auditLogs       FeatureAuditLog[]
+  dependencies    FeatureDependency[] @relation("FeatureDependsOn")
+  requiredBy      FeatureDependency[] @relation("FeatureRequiredBy")
+
+  @@index([releaseChannel])
+  @@index([category])
+}
+
+model FeatureDependency {
+  id               String  @id @default(cuid())
+  featureKey       String
+  dependsOnFeature String
+
+  feature   Feature @relation("FeatureDependsOn", fields: [featureKey], references: [key], onDelete: Cascade)
+  dependsOn Feature @relation("FeatureRequiredBy", fields: [dependsOnFeature], references: [key], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([featureKey, dependsOnFeature])
+  @@index([featureKey])
+  @@index([dependsOnFeature])
+}
+
+model FuneralHomeFeature {
+  id                   String      @id @default(cuid())
+  funeralHomeId        String
+  funeralHome          FuneralHome @relation(fields: [funeralHomeId], references: [id], onDelete: Cascade)
+  featureKey           String
+  feature              Feature     @relation(fields: [featureKey], references: [key], onDelete: Cascade)
+  enabled              Boolean
+  releaseChannelOverride String?
+  enabledBy            String?
+  enabledAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@unique([funeralHomeId, featureKey])
+  @@index([featureKey])
+}
+
+model UserFeature {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  featureKey String
+  feature    Feature  @relation(fields: [featureKey], references: [key], onDelete: Cascade)
+  enabled    Boolean
+  expiresAt  DateTime?
+  enabledBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, featureKey])
+  @@index([featureKey])
+}
+
+model FeatureAuditLog {
+  id           String      @id @default(cuid())
+  actorUserId  String?
+  actorName    String?
+  action       String
+  featureKey   String
+  feature      Feature     @relation(fields: [featureKey], references: [key], onDelete: Cascade)
+  targetType   String
+  targetId     String?
+  funeralHomeId String?
+  details      String?
+  createdAt    DateTime    @default(now())
+
+  @@index([featureKey])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }

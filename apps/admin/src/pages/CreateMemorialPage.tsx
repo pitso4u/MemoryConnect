@@ -8,6 +8,7 @@ export default function CreateMemorialPage() {
     deceasedName: '',
     serviceDate: '',
     serviceVenue: '',
+    timezone: 'Africa/Johannesburg',
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -43,7 +44,12 @@ export default function CreateMemorialPage() {
     setError('');
     setLoading(true);
     try {
-      const memorial = await api.createMemorial(form);
+      const memorial = await api.createMemorial({
+        deceasedName: form.deceasedName,
+        serviceDate: form.serviceDate,
+        serviceVenue: form.serviceVenue,
+        timezone: form.timezone,
+      });
       if (logoFile) {
         await api.uploadLogo(memorial.id, logoFile);
       }
@@ -98,6 +104,32 @@ export default function CreateMemorialPage() {
             className="w-full px-4 py-2.5 rounded-lg border border-parchment-dark focus:outline-none focus:ring-2 focus:ring-gold/40 focus:border-gold transition"
             placeholder="e.g. St. Mary's Church, Soweto"
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-ink mb-1.5">Timezone</label>
+          <select
+            value={form.timezone}
+            onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+            className="w-full px-4 py-2.5 rounded-lg border border-parchment-dark focus:outline-none focus:ring-2 focus:ring-gold/40 focus:border-gold transition bg-white"
+          >
+            <option value="Africa/Johannesburg">South Africa (UTC+2)</option>
+            <option value="Africa/Cairo">Egypt (UTC+2)</option>
+            <option value="Africa/Lagos">Nigeria (UTC+1)</option>
+            <option value="Africa/Nairobi">Kenya (UTC+3)</option>
+            <option value="Africa/Casablanca">Morocco (UTC+1)</option>
+            <option value="Africa/Windhoek">Namibia (UTC+2)</option>
+            <option value="Africa/Accra">Ghana (UTC+0)</option>
+            <option value="America/New_York">Eastern Time (UTC-5)</option>
+            <option value="America/Chicago">Central Time (UTC-6)</option>
+            <option value="America/Denver">Mountain Time (UTC-7)</option>
+            <option value="America/Los_Angeles">Pacific Time (UTC-8)</option>
+            <option value="Europe/London">London (UTC+1)</option>
+            <option value="Europe/Paris">Paris (UTC+2)</option>
+            <option value="Europe/Berlin">Berlin (UTC+2)</option>
+            <option value="Asia/Dubai">Dubai (UTC+4)</option>
+            <option value="Australia/Sydney">Sydney (UTC+11)</option>
+            <option value="Pacific/Auckland">Auckland (UTC+13)</option>
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-ink mb-1.5">Funeral Home Logo (Optional)</label>

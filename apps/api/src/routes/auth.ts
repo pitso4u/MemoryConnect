@@ -10,6 +10,8 @@ import { brandFromFuneralHome } from '@memorialconnect/shared';
 import { isZodError } from '../lib/validation';
 import { z } from 'zod';
 import { UPLOADS_DIR } from '../lib/uploads';
+import { getPlatformSettings } from '../lib/platformSettings';
+import { addDays } from '../lib/publishing';
 
 const router = Router();
 
@@ -58,6 +60,15 @@ function withBrand<T extends Record<string, unknown>>(funeralHome: T) {
   return { ...funeralHome, brand: brandFromFuneralHome(funeralHome) };
 }
 
+async function trialForNewHome() {
+  const settings = await getPlatformSettings();
+  if (!settings.trialEnabled) return {};
+  return {
+    trialStartsAt: new Date(),
+    trialEndsAt: addDays(new Date(), settings.trialDays),
+  };
+}
+
 router.post('/register', async (req, res) => {
   try {
     const body = registerSchema.parse(req.body);
@@ -67,10 +78,20 @@ router.post('/register', async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(body.password, 12);
+    const baseSlug = body.funeralHomeName
+      .toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_]+/g, '-').replace(/--+/g, '-').replace(/^-+|-+$/g, '').slice(0, 200);
+    let slug = baseSlug;
+    let slugCounter = 1;
+    while (await prisma.funeralHome.findUnique({ where: { slug } })) {
+      slug = `${baseSlug}-${slugCounter}`;
+      slugCounter++;
+    }
     const funeralHome = await prisma.funeralHome.create({
       data: {
         name: body.funeralHomeName,
+        slug,
         email: body.email,
+        ...await trialForNewHome(),
         users: {
           create: {
             name: body.name,
@@ -189,6 +210,8 @@ router.get('/me', authenticate, async (req, res) => {
         secondaryColor: user.funeralHome.secondaryColor,
         websiteUrl: user.funeralHome.websiteUrl,
         facebookUrl: user.funeralHome.facebookUrl,
+        plan: user.funeralHome.plan,
+        edition: user.funeralHome.edition,
         brand: brandFromFuneralHome(user.funeralHome),
         analyticsAccessEnabled: user.funeralHome.analyticsAccessEnabled,
         apiAccessEnabled: user.funeralHome.apiAccessEnabled,
@@ -196,6 +219,23 @@ router.get('/me', authenticate, async (req, res) => {
       } : null,
     },
   });
+});
+
+router.get('/my-features', authenticate, async (req, res) => {
+  try {
+    const funeralHome = req.user!.funeralHomeId
+      ? await prisma.funeralHome.findUnique({
+          where: { id: req.user!.funeralHomeId },
+          select: { id: true, plan: true, edition: true },
+        })
+      : null;
+    const { resolveFeatures } = await import('../lib/featureService');
+    const features = await resolveFeatures(req.user!, funeralHome);
+    res.json({ success: true, data: { features } });
+  } catch (error) {
+    console.error('Get my features error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load feature availability' });
+  }
 });
 
 router.get('/funeral-home-profile', authenticate, async (req, res) => {

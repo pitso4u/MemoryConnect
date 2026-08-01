@@ -1,6 +1,6 @@
 # Memory Connect User Guide
 
-**Version 1.1**
+**Version 1.3**
 
 This manual teaches funeral home owners, office administrators, receptionists, staff members, family members, and the Memory Connect platform owner how to use the system.
 
@@ -14,11 +14,12 @@ Memory Connect turns funeral information into one respectful digital memorial. S
 
 | Reader | Start Here | Continue With |
 |---|---|---|
-| New funeral home owner | [Getting Started](01-getting-started.md) | Setup, branding, payments, analytics |
+| New funeral home owner | [Getting Started](01-getting-started.md) | Setup, branding, payments, analytics, Marketing Hub |
 | Administrator or receptionist | [Getting Started](01-getting-started.md) | Create a Memorial, Family Management, Publishing |
+| Operations staff | [Vehicles & Assets](14-vehicles-and-assets.md) | Funeral Resources |
 | Family Manager | [Family Management](05-family-management.md) | Public Memorial |
 | Family Contributor | [Family Management](05-family-management.md) | Public Memorial |
-| Platform owner | [Owner Dashboard](10-owner-dashboard.md) | Analytics, Troubleshooting |
+| Platform owner | [Owner Dashboard](10-owner-dashboard.md) | Feature Management, Analytics, Troubleshooting |
 
 ## Complete Manual
 
@@ -34,6 +35,10 @@ Memory Connect turns funeral information into one respectful digital memorial. S
 10. [Owner Platform Dashboard](10-owner-dashboard.md)
 11. [Troubleshooting](11-troubleshooting.md)
 12. [Frequently Asked Questions](12-faq.md)
+13. [Marketing Hub](13-marketing-hub.md)
+14. [Vehicles & Assets](14-vehicles-and-assets.md)
+15. [Funeral Resources](15-funeral-resources.md)
+16. [Feature Management](16-feature-management.md)
 
 ## Quick Reference
 
@@ -92,3 +97,11 @@ flowchart LR
 - [ ] Complete a test payment before using live payment mode.
 - [ ] Download and test the QR code.
 - [ ] View analytics.
+- [ ] Create a brochure category.
+- [ ] Publish a digital brochure with a QR code.
+- [ ] Add a vehicle and record its service history.
+- [ ] Add an asset and generate its QR code.
+- [ ] Reserve vehicles and assets for a memorial.
+- [ ] Review the feature registry as platform owner.
+- [ ] Enable a feature for one funeral home with an override.
+- [ ] Add a feature dependency in Feature Management and confirm the child stays hidden.

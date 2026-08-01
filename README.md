@@ -1,8 +1,8 @@
 # Memory Connect
 
-**Professional Digital Funeral & Memorial Management Platform**
+**Professional Funeral Operations & Digital Memorial Platform**
 
-Memory Connect helps funeral homes create, publish, and share dignified digital memorials. It brings the obituary, funeral programme, photographs, venue directions, tribute messages, and family collaboration into one simple service.
+Memory Connect is a comprehensive funeral home platform that combines digital memorials with real operational tools. It helps funeral homes create, publish, and share dignified digital memorials while managing their marketing, vehicles, assets, and funeral-day logistics from one system — turning Memory Connect into a complete Funeral Operations Platform, not just a digital memorial service.
 
 ## Introduction
 
@@ -25,8 +25,13 @@ Memory Connect is designed for:
 | Consistent branding | Apply the funeral home's logo, colours, contact details, and visual style. |
 | Clear oversight | Monitor memorials, payments, public views, and account activity. |
 | Respectful privacy | Public viewing ends after 30 days and retained memorial data is removed after 90 days. |
+| Market your services | Publish digital brochures and promotions on your own funeral home services page. |
+| Run your operations | Manage hearses, service vehicles, and reusable equipment from one screen. |
+| Plan each funeral | Reserve vehicles and assets per memorial with double-booking protection. |
 
 ## Features
+
+### Memorial & Family Experience
 
 - **Funeral Home Management** - Manage the funeral home profile, staff, memorials, and activity.
 - **Family Collaboration** - Give assigned family members controlled access to contribute content.
@@ -44,6 +49,43 @@ Memory Connect is designed for:
 - **Funeral Feedback** - Collect attendee ratings on overall experience, staff, organisation, and venue. Capture contact requests and convert enquiries into new business. See [Funeral Feedback documentation](docs/10-funeral-feedback.md).
 - **Platform Oversight** - Give SUPER_ADMIN users an owner dashboard for revenue, support, and audit activity.
 
+### Marketing Hub
+
+Give the funeral home its own public services page and grow enquiries:
+
+- **Marketing Dashboard** - Overview of brochure views, QR scans, and enquiry activity.
+- **Digital Brochures** - Build packages and service brochures with cover images, PDFs, photo galleries, call-to-action buttons, and SEO fields. Each brochure gets its own public page at `/services/{slug}` and a printable QR code.
+- **Brochure Categories** - Organise brochures into categories such as Funeral Packages, Burials, and Cremations.
+- **Promotions** - Announce seasonal offers and specials with banners and date ranges.
+- **Branches** - Show each branch with contact details, GPS coordinates, opening hours, and Google Maps links.
+- **Contact Information** - Publish phone, WhatsApp, email, and social links for the funeral home.
+- **Enquiries** - Collect and manage lead enquiries submitted from brochures.
+- **Analytics** - Track page views, unique visitors, QR scans, PDF downloads, and conversions over time.
+- **Public Services Page** - Every funeral home gets a public page at `/fh/{slug}`, and memorials link to it with a "Services from {Funeral Home}" section.
+
+### Operations (Vehicle & Asset Management)
+
+Manage the physical resources behind every funeral:
+
+- **Vehicle Management** - Track hearses, family cars, minibuses, trucks, and utility vehicles. Record registration numbers, specs, insurance, roadworthy and license-disk expiries, assigned drivers, service history, fuel logs, maintenance logs, and vehicle photos with reminders for renewals.
+- **Asset Management** - Track reusable equipment (tents, chairs, tables, stretchers, sound systems, generators, and more) with serial numbers, purchase and warranty details, QR codes per asset, movement history, branch transfers, and damage reports.
+- **Funeral Resources** - Reserve vehicles and assets against each memorial from a single planning screen, with an availability check that prevents double booking and a check-in/check-out workflow for funeral day.
+- **Vehicle Calendar** - Each vehicle shows its upcoming services and reservations so nothing is double-booked.
+
+### Feature Management & Release Management
+
+Platform owners control exactly who sees what, and when:
+
+- **Feature Registry** - Every capability (memorials, live stream, vehicles, assets, insurance, CRM, and more) is a registered feature with a name, category, release channel, and rollout percentage.
+- **Release Channels** - Features move through `INTERNAL`, `QA`, `BETA`, `EARLY_ACCESS`, `GENERAL_AVAILABILITY`, `DEPRECATED`, and `DISABLED`, gated by the viewer's role.
+- **Subscription Gating** - Each feature can require a minimum edition (`MEMORIAL`, `FUNERAL_OFFICE`, `ENTERPRISE`, `WHITE_LABEL`) and subscription plan (`STARTER` → `ENTERPRISE`).
+- **Rollout Control** - Ship a feature to 0%, 5%, 10%, 25%, 50%, 75%, or 100% of funeral homes with deterministic per-home sampling.
+- **Feature Dependencies** - A feature can require other features (e.g. CASE_MANAGEMENT requires MEMORIALS); the child stays hidden until every dependency resolves enabled, with circular dependencies rejected at both the API and the resolution engine.
+- **Per-Home & Per-User Overrides** - Force-enable or deny a feature for a specific funeral home or user, including early-access opt-ins and expiry dates.
+- **Feature Tester** - SUPER_ADMIN can preview the resolved feature set as any funeral home to verify gating.
+- **Audit Trail** - Every feature change (create, update, enable, disable, override) is logged with the acting user.
+- **Server-Side Evaluation** - The API resolves features and the admin sidebar auto-hides disabled capabilities for the signed-in account.
+
 ## Product Roles
 
 ```mermaid
@@ -58,7 +100,7 @@ flowchart TD
 
 | Role | Main Access |
 |---|---|
-| SUPER_ADMIN | Platform overview, funeral homes, payments, users, support, analytics, and audit logs. |
+| SUPER_ADMIN | Platform overview, funeral homes, payments, users, support, analytics, audit logs, and feature management. |
 | Funeral Home Admin | Funeral home profile, memorial creation, family invitations, payments, and publishing. |
 | Funeral Home Staff | Funeral home memorial workflow as permitted by the organisation. |
 | Family Manager | Assigned memorial content, photos, locations, programme, tributes, and preview. |
@@ -85,9 +127,24 @@ flowchart LR
 | Component | Purpose | Local Address |
 |---|---|---|
 | Admin Portal | Funeral home, family, and platform owner workflows | `http://localhost:5173` |
-| Memorial Portal | Public memorial and projector experience | `http://localhost:5174` |
-| API | Authentication, memorials, payments, analytics, and permissions | `http://localhost:4000` |
-| Database | Users, funeral homes, memorials, payments, invitations, and audit records | Prisma-managed |
+| Memorial Portal | Public memorial, projector, and funeral home services experience | `http://localhost:5174` |
+| API | Authentication, memorials, payments, marketing, operations, analytics, and permissions | `http://localhost:4000` |
+| Database | Users, funeral homes, memorials, payments, invitations, brochures, vehicles, assets, and audit records | Prisma-managed |
+
+**API route groups (all under `/api/v1`):**
+
+| Group | Purpose |
+|---|---|
+| `/auth` | Login, registration, and funeral home profile |
+| `/memorials` | Memorial CRUD, publishing, preview tokens, photos, and locations |
+| `/public` | Public memorial and funeral home marketing pages |
+| `/payments` | Paystack payment initialisation and verification |
+| `/marketing` | Brochures, categories, promotions, branches, contact, enquiries, and analytics |
+| `/vehicles` | Vehicle CRUD, photos, service history, fuel log, and maintenance |
+| `/assets` | Asset CRUD, photos, movements, damage reports, and QR codes |
+| `/funeral-resources` | Vehicle/asset reservations per memorial and availability checks |
+| `/platform/features` | SUPER_ADMIN feature registry, rollout, overrides, resolution preview, and audit log |
+| `/platform` | SUPER_ADMIN owner dashboard, payments, users, support, and audit logs |
 
 > **Note:** Production infrastructure can place Cloudflare and Traefik in front of the applications and use Google Cloud or compatible object storage for media and backups. Local development uses the configured local database and upload directory.
 
@@ -120,6 +177,10 @@ The complete end-user training manual is in [`docs/README.md`](docs/README.md).
 | [Public Memorial](docs/08-public-memorial.md) | Staff, family, and guests |
 | [Analytics](docs/09-analytics.md) | Owners and administrators |
 | [Owner Dashboard](docs/10-owner-dashboard.md) | Platform owner |
+| [Marketing Hub](docs/13-marketing-hub.md) | Owners and administrators |
+| [Vehicles & Assets](docs/14-vehicles-and-assets.md) | Owners and administrators |
+| [Funeral Resources](docs/15-funeral-resources.md) | Owners, administrators, and staff |
+| [Feature Management](docs/16-feature-management.md) | Platform owner |
 | [Troubleshooting](docs/11-troubleshooting.md) | All users |
 | [Frequently Asked Questions](docs/12-faq.md) | All users |
 

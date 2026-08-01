@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireRole, ROLES } from '../middleware/auth';
 import { env } from '../lib/env';
+import { getPlatformSettings, updatePlatformSettings } from '../lib/platformSettings';
 
 const router = Router();
 router.use(authenticate, requireRole([ROLES.SUPER_ADMIN]));
@@ -51,18 +53,24 @@ async function paymentRows() {
 router.get('/summary', async (_req, res) => {
   const today = startOfToday();
   const month = startOfMonth();
-  const [homes, users, memorials, payments, views] = await Promise.all([
-    prisma.funeralHome.findMany({ select: { id: true, status: true, createdAt: true } }),
+  const [homes, users, memorials, payments, views, creditPurchases] = await Promise.all([
+    prisma.funeralHome.findMany({ select: { id: true, status: true, createdAt: true, trialStartsAt: true, trialEndsAt: true, trialMemorialsUsed: true, memorialCreditsRemaining: true } }),
     prisma.user.findMany({ select: { role: true, passwordSetAt: true } }),
     prisma.memorial.findMany({ where: { isDemo: false }, select: { status: true, editLocksAt: true, publicExpiresAt: true, deletedAt: true, publishedAt: true } }),
     prisma.payment.findMany({ select: { amountCents: true, status: true, paidAt: true, createdAt: true } }),
     prisma.memorialView.count({ where: { memorial: { isDemo: false } } }),
+    prisma.creditPurchase.findMany({ select: { amountCents: true, status: true, paidAt: true, createdAt: true } }),
   ]);
   const successful = payments.filter((payment) => isSuccessful(payment.status));
+  const successfulPurchases = creditPurchases.filter((purchase) => isSuccessful(purchase.status));
   const revenue = (from?: Date) => successful
     .filter((payment) => !from || (payment.paidAt || payment.createdAt) >= from)
-    .reduce((sum, payment) => sum + payment.amountCents, 0);
+    .reduce((sum, payment) => sum + payment.amountCents, 0)
+    + successfulPurchases
+      .filter((purchase) => !from || (purchase.paidAt || purchase.createdAt) >= from)
+      .reduce((sum, purchase) => sum + purchase.amountCents, 0);
 
+  const now = new Date();
   res.json({
     success: true,
     data: {
@@ -73,6 +81,10 @@ router.get('/summary', async (_req, res) => {
         pending: homes.filter((home) => upper(home.status) === 'PENDING').length,
         active: homes.filter((home) => upper(home.status) === 'ACTIVE').length,
         inactive: homes.filter((home) => upper(home.status) !== 'ACTIVE').length,
+      },
+      trials: {
+        active: homes.filter((home) => home.trialEndsAt && home.trialEndsAt > now).length,
+        expired: homes.filter((home) => home.trialStartsAt && (!home.trialEndsAt || home.trialEndsAt <= now)).length,
       },
       users: {
         total: users.length,
@@ -85,6 +97,8 @@ router.get('/summary', async (_req, res) => {
         successful: successful.length,
         failed: payments.filter((payment) => isFailed(payment.status)).length,
         pending: payments.filter((payment) => isPending(payment.status)).length,
+        creditPurchases: successfulPurchases.length,
+        creditPurchaseRevenueCents: successfulPurchases.reduce((sum, purchase) => sum + purchase.amountCents, 0),
       },
       memorials: {
         total: memorials.length,
@@ -131,6 +145,11 @@ router.get('/funeral-homes', async (_req, res) => {
         paymentsTotalCents: home.payments.filter((payment) => isSuccessful(payment.status)).reduce((sum, payment) => sum + payment.amountCents, 0),
         lastActivityAt: activityDates.sort((a, b) => b.getTime() - a.getTime())[0] || home.createdAt,
         status: home.status,
+        trialStartsAt: home.trialStartsAt,
+        trialEndsAt: home.trialEndsAt,
+        trialMemorialsUsed: home.trialMemorialsUsed,
+        memorialCreditsPurchased: home.memorialCreditsPurchased,
+        memorialCreditsRemaining: home.memorialCreditsRemaining,
       };
     }),
   });
@@ -143,6 +162,7 @@ router.get('/funeral-homes/:id', async (req, res) => {
       users: { select: { id: true, name: true, email: true, role: true, passwordSetAt: true, lastLoginAt: true, createdAt: true } },
       memorials: { orderBy: { createdAt: 'desc' }, take: 100 },
       payments: { orderBy: { createdAt: 'desc' }, take: 100, include: { memorial: { select: { deceasedName: true } } } },
+      creditPurchases: { orderBy: { createdAt: 'desc' }, take: 100 },
       familyInvitations: { orderBy: { createdAt: 'desc' }, take: 100, include: { memorial: { select: { deceasedName: true } } } },
       platformAuditLogs: { orderBy: { createdAt: 'desc' }, take: 100, include: { actor: { select: { name: true, email: true } } } },
     },
@@ -295,6 +315,70 @@ router.delete('/memorials/:id', async (req, res) => {
   await audit(req.user!.userId, 'MEMORIAL_DELETED', 'MEMORIAL', memorial.id, memorial.funeralHomeId, { deceasedName: memorial.deceasedName });
   await prisma.memorial.delete({ where: { id: memorial.id } });
   res.json({ success: true, data: null });
+});
+
+const commercialSettingsSchema = z.object({
+  trialEnabled: z.boolean().optional(),
+  trialDays: z.number().int().min(1).max(365).optional(),
+  freeMemorialLimit: z.number().int().min(1).max(1000).optional(),
+  singleMemorialPriceCents: z.number().int().min(1).optional(),
+  currency: z.string().min(3).max(8).optional(),
+  subscriptionsEnabled: z.boolean().optional(),
+  creditBundles: z.array(z.object({
+    credits: z.number().int().positive(),
+    priceCents: z.number().int().positive(),
+  })).optional(),
+});
+
+router.get('/commercial-settings', async (_req, res) => {
+  const settings = await getPlatformSettings();
+  res.json({ success: true, data: settings });
+});
+
+router.patch('/commercial-settings', async (req, res) => {
+  try {
+    const body = commercialSettingsSchema.parse(req.body ?? {});
+    const settings = await updatePlatformSettings(body);
+    await audit(req.user!.userId, 'COMMERCIAL_SETTINGS_UPDATED', 'PLATFORM_SETTING', 'commercial', null, body as unknown as Record<string, unknown>);
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, error: error.errors[0].message });
+    }
+    throw error;
+  }
+});
+
+router.get('/credit-purchases', async (_req, res) => {
+  const purchases = await prisma.creditPurchase.findMany({
+    include: { funeralHome: { select: { id: true, name: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ success: true, data: purchases });
+});
+
+router.post('/credit-purchases/:id/verify', async (req, res) => {
+  if (req.body?.confirmed !== true) return res.status(400).json({ success: false, error: 'Explicit confirmation is required' });
+  const purchase = await prisma.creditPurchase.findUnique({ where: { id: req.params.id } });
+  if (!purchase) return res.status(404).json({ success: false, error: 'Credit purchase not found' });
+  const paidAt = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    const verified = await tx.creditPurchase.update({ where: { id: purchase.id }, data: { status: 'SUCCESS', paidAt } });
+    await tx.funeralHome.update({
+      where: { id: purchase.funeralHomeId },
+      data: {
+        memorialCreditsPurchased: { increment: purchase.credits },
+        memorialCreditsRemaining: { increment: purchase.credits },
+        lastCreditPurchaseAt: paidAt,
+      },
+    });
+    return verified;
+  });
+  await audit(req.user!.userId, 'CREDIT_PURCHASE_MANUALLY_VERIFIED', 'CREDIT_PURCHASE', purchase.id, purchase.funeralHomeId, {
+    reference: purchase.paystackReference,
+    previousStatus: purchase.status,
+  });
+  res.json({ success: true, data: updated });
 });
 
 export default router;

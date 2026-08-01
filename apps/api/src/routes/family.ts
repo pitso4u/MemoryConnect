@@ -2,7 +2,7 @@ import { Router, Request } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { z } from 'zod';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma';
 import { prisma } from '../lib/prisma';
 import { env } from '../lib/env';
 import { isZodError } from '../lib/validation';

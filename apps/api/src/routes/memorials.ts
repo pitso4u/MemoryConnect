@@ -16,7 +16,10 @@ import {
   PAYMENT_STATUS,
   PUBLISH_CURRENCY,
   PUBLISH_PRICE_CENTS,
+  publishMemorialWithEntitlement,
 } from '../lib/publishing';
+import { computeEntitlement, canPublishFree } from '../lib/entitlement';
+import { getPlatformSettings } from '../lib/platformSettings';
 import { permanentlyDeleteMemorial } from '../lib/retention';
 import { isZodError } from '../lib/validation';
 import { brandFromFuneralHome } from '@memorialconnect/shared';
@@ -34,7 +37,9 @@ const createSchema = z.object({
   dateOfBirth: z.string().optional(),
   dateOfDeath: z.string().optional(),
   serviceDate: z.string().optional(),
+  serviceEndTime: z.string().optional(),
   serviceVenue: z.string().optional(),
+  timezone: z.string().optional(),
   logoUrl: z.string().regex(/^(https?:\/\/|\/)/).optional().or(z.literal('')),
 });
 
@@ -43,7 +48,9 @@ const updateSchema = z.object({
   dateOfBirth: z.string().optional().nullable(),
   dateOfDeath: z.string().optional().nullable(),
   serviceDate: z.string().optional().nullable(),
+  serviceEndTime: z.string().optional().nullable(),
   serviceVenue: z.string().optional().nullable(),
+  timezone: z.string().optional().nullable(),
   deceasedPhotoUrl: z.string().optional().nullable(),
   logoUrl: z.string().regex(/^(https?:\/\/|\/)/).optional().or(z.literal('')).nullable(),
   obituary: z.string().optional().nullable(),
@@ -116,7 +123,9 @@ router.post('/', authenticate, async (req, res) => {
         dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : null,
         dateOfDeath: body.dateOfDeath ? new Date(body.dateOfDeath) : null,
         serviceDate: body.serviceDate ? new Date(body.serviceDate) : null,
+        serviceEndTime: body.serviceEndTime || undefined,
         serviceVenue: body.serviceVenue,
+        timezone: body.timezone || undefined,
         logoUrl: body.logoUrl || null,
         funeralHomeId: req.user!.funeralHomeId,
         programme: [],
@@ -232,17 +241,10 @@ router.post('/:id/initialize-publish-payment', authenticate, async (req, res) =>
   if (!canManageFuneralHome(req.user!.role) || !req.user!.funeralHomeId) {
     return res.status(403).json({ success: false, error: 'Only funeral home admins can publish memorials' });
   }
-  if (!env.PAYSTACK_SECRET_KEY) {
-    return res.status(503).json({
-      success: false,
-      code: 'PAYSTACK_NOT_CONFIGURED',
-      error: 'Paystack is not configured. Add PAYSTACK_SECRET_KEY to apps/api/.env and restart the API.',
-    });
-  }
   const id = paramId(req);
   const memorial = await prisma.memorial.findFirst({
     where: { id, funeralHomeId: req.user!.funeralHomeId },
-    include: { funeralHome: { select: { email: true } } },
+    include: { funeralHome: { select: { email: true, trialStartsAt: true, trialEndsAt: true, trialMemorialsUsed: true, memorialCreditsPurchased: true, memorialCreditsRemaining: true, lastCreditPurchaseAt: true } } },
   });
   if (!memorial) return res.status(404).json({ success: false, error: 'Memorial not found' });
   if (memorial.isDemo) return res.status(403).json({ success: false, error: 'The demo memorial does not require payment.' });
@@ -259,6 +261,29 @@ router.post('/:id/initialize-publish-payment', authenticate, async (req, res) =>
     return res.status(400).json({ success: false, code: 'INCOMPLETE_MEMORIAL', error: `Add the ${missing.join(', ')} before publishing.` });
   }
 
+  // Trial allowance and prepaid credits publish the memorial without a
+  // Paystack charge (creation always stays free; the charge is on publishing).
+  const settings = await getPlatformSettings();
+  const entitlement = computeEntitlement(memorial.funeralHome, settings);
+  if (canPublishFree(entitlement)) {
+    const published = await publishMemorialWithEntitlement(memorial.id, memorial.funeralHomeId, entitlement.mode);
+    return res.json({
+      success: true,
+      data: {
+        free: true,
+        mode: entitlement.mode,
+        memorial: formatMemorial(published as unknown as Record<string, unknown>),
+      },
+    });
+  }
+
+  if (!env.PAYSTACK_SECRET_KEY) {
+    return res.status(503).json({
+      success: false,
+      code: 'PAYSTACK_NOT_CONFIGURED',
+      error: 'Paystack is not configured. Add PAYSTACK_SECRET_KEY to apps/api/.env and restart the API.',
+    });
+  }
   const reference = createPublishReference(id);
   const payment = await prisma.$transaction(async (tx) => {
     await tx.payment.updateMany({
@@ -373,7 +398,7 @@ router.patch('/:id', authenticate, async (req, res) => {
     if (existing.status === MEMORIAL_STATUS.DELETED) return res.status(410).json({ success: false, error: 'Memorial has been deleted' });
     if (isEditLocked(existing) && req.user!.role.toUpperCase() !== 'SUPER_ADMIN') return lockedResponse(res);
 
-    const { biography, programme, announcements, settings, ...rest } = body;
+    const { biography, programme, announcements, settings, timezone, serviceEndTime, ...rest } = body;
     const role = normalizeRole(req.user!.role);
     if (role === ROLES.FAMILY_CONTRIBUTOR) {
       const allowed = ['obituary', 'biography', 'programme'] as const;
@@ -394,6 +419,8 @@ router.patch('/:id', authenticate, async (req, res) => {
         dateOfBirth: body.dateOfBirth !== undefined ? body.dateOfBirth ? new Date(body.dateOfBirth) : null : undefined,
         dateOfDeath: body.dateOfDeath !== undefined ? body.dateOfDeath ? new Date(body.dateOfDeath) : null : undefined,
         serviceDate: body.serviceDate !== undefined ? body.serviceDate ? new Date(body.serviceDate) : null : undefined,
+        timezone: body.timezone !== undefined ? (body.timezone || undefined) : undefined,
+        serviceEndTime: body.serviceEndTime !== undefined ? (body.serviceEndTime || undefined) : undefined,
       },
     });
     if (body.obituary !== undefined || body.biography !== undefined) {

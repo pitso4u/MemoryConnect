@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { completePublishPayment, MEMORIAL_STATUS, PAYMENT_PURPOSE, PAYMENT_STATUS, verifyPaystackSignature } from '../lib/publishing';
+import { completePublishPayment, completeCreditPurchase, CREDIT_PURCHASE_PURPOSE, MEMORIAL_STATUS, PAYMENT_PURPOSE, PAYMENT_STATUS, verifyPaystackSignature } from '../lib/publishing';
 import { authenticate, isFuneralHomeRole } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 
@@ -27,7 +27,8 @@ router.post('/webhook', async (req, res) => {
 
   try {
     const event = req.body as { event?: string; data?: any };
-    if (event.data?.metadata?.purpose === PAYMENT_PURPOSE) {
+    const purpose = event.data?.metadata?.purpose;
+    if (purpose === PAYMENT_PURPOSE) {
       if (event.event === 'charge.success') {
         await completePublishPayment(event.data.reference, event.data);
       } else if (event.event === 'charge.failed') {
@@ -38,6 +39,15 @@ router.post('/webhook', async (req, res) => {
             prisma.memorial.update({ where: { id: payment.memorialId }, data: { status: MEMORIAL_STATUS.DRAFT, paymentStatus: PAYMENT_STATUS.FAILED } }),
           ]);
         }
+      }
+    } else if (purpose === CREDIT_PURCHASE_PURPOSE) {
+      if (event.event === 'charge.success') {
+        await completeCreditPurchase(event.data.reference, event.data);
+      } else if (event.event === 'charge.failed') {
+        await prisma.creditPurchase.updateMany({
+          where: { paystackReference: event.data.reference, status: PAYMENT_STATUS.PENDING },
+          data: { status: PAYMENT_STATUS.FAILED },
+        });
       }
     }
     res.sendStatus(200);

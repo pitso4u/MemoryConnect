@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useParams } from 'react-router-dom';
 import { api, PublicMemorial, photoUrl } from '../lib/api';
 import { brandCssVariables, brandFromFuneralHome } from '../lib/brand';
 import {
-  BookOpen, Calendar, MapPin, Image, MessageSquare, Heart, Navigation, ArrowRight, Star,
+  BookOpen, MapPin, Image, MessageSquare, Heart, Navigation, ArrowRight, Star, Download,
 } from 'lucide-react';
 import { getAdminUrl, getPublicUrl } from '../lib/config';
+import PhotoLightbox from '../components/gallery/PhotoLightbox';
+import { initQA, isQAMode } from '../lib/qa';
+import AdminQAPanel from '../components/qa/AdminQAPanel';
+import ServiceCountdown from '../components/ServiceCountdown';
 
 const sections = [
   { key: 'programme', label: 'Programme', icon: BookOpen },
@@ -15,6 +19,7 @@ const sections = [
   { key: 'directions', label: 'Directions', icon: MapPin },
   { key: 'tributes', label: 'Tributes', icon: MessageSquare },
   { key: 'feedback', label: 'Funeral Feedback', icon: Star },
+  { key: 'services', label: 'Funeral Home Services', icon: Navigation },
 ] as const;
 
 type Section = typeof sections[number]['key'];
@@ -48,6 +53,25 @@ export default function MemorialPage() {
   const [error, setError] = useState('');
   const [activeSection, setActiveSection] = useState<Section>('programme');
   const previewToken = new URLSearchParams(window.location.search).get('preview') || undefined;
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  const openLightbox = useCallback((index: number) => {
+    setLightboxIndex(index);
+    setLightboxOpen(true);
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxOpen(false);
+  }, []);
+
+  const nextPhoto = useCallback(() => {
+    setLightboxIndex((prev) => (prev + 1) % memorial!.photos.length);
+  }, [memorial]);
+
+  const previousPhoto = useCallback(() => {
+    setLightboxIndex((prev) => (prev - 1 + memorial!.photos.length) % memorial!.photos.length);
+  }, [memorial]);
 
   useEffect(() => {
     if (!slug) return;
@@ -99,6 +123,12 @@ export default function MemorialPage() {
       // View counting must never block the memorial experience.
     }
   }, [slug, previewToken, memorial?.id, memorial?.isPreview]);
+
+  useEffect(() => {
+    void initQA();
+  }, []);
+
+  const qaMode = isQAMode();
 
   if (loading) {
     return (
@@ -220,7 +250,16 @@ export default function MemorialPage() {
         <div className="relative px-6 pt-16 pb-10 text-center animate-fade-up [text-shadow:0_2px_18px_rgba(0,0,0,0.45)]">
           {brand.logoUrl && <img src={photoUrl(brand.logoUrl)} alt={`${displayName} logo`} className="mx-auto mb-4 max-h-16 max-w-48 object-contain" />}
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--brand-accent)] mb-2">Presented by</p>
-          <p className="mb-6 font-display text-2xl text-[var(--brand-text)]">{displayName}</p>
+          <p className="mb-3 font-display text-2xl text-[var(--brand-text)]">{displayName}</p>
+          {memorial.qrPosterUrl && (
+            <a
+              href={photoUrl(memorial.qrPosterUrl)}
+              download
+              className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-[var(--brand-accent)]/40 px-4 py-1.5 text-xs font-semibold text-[var(--brand-accent)] transition hover:bg-[var(--brand-accent)]/10"
+            >
+              <Download size={13} /> Download QR Poster
+            </a>
+          )}
           <div className="mx-auto mb-7 h-44 w-44 overflow-hidden rounded-full border-2 border-[var(--brand-accent)]/40 bg-white/5 shadow-2xl shadow-black/30 sm:h-52 sm:w-52">
             {memorial.deceasedPhotoUrl ? (
               <img src={photoUrl(memorial.deceasedPhotoUrl)} alt={`Portrait of ${memorial.deceasedName}`} className="h-full w-full object-cover" />
@@ -241,24 +280,18 @@ export default function MemorialPage() {
               {memorial.dateOfDeath && new Date(memorial.dateOfDeath).getFullYear()}
             </p>
           )}
-          <div className="flex items-center justify-center gap-4 mt-4 text-sm text-[var(--brand-text)]/70">
-            {memorial.serviceDate && (
-              <span className="flex items-center gap-1">
-                <Calendar size={14} />
-                {new Date(memorial.serviceDate).toLocaleDateString('en-ZA', {
-                  weekday: 'long', day: 'numeric', month: 'long',
-                })}
-              </span>
-            )}
-            {memorial.serviceVenue && (
-              <span className="flex items-center gap-1">
-                <MapPin size={14} />
-                {memorial.serviceVenue}
-              </span>
-            )}
-          </div>
         </div>
       </header>
+
+      {memorial.serviceDate && (
+        <ServiceCountdown
+          serviceDate={memorial.serviceDate}
+          serviceEndTime={memorial.serviceEndTime}
+          serviceVenue={memorial.serviceVenue}
+          timezone={memorial.timezone}
+          livestreamUrl={memorial.settings?.livestreamUrl}
+        />
+      )}
 
       {/* Announcements */}
       {activeAnnouncements.length > 0 && (
@@ -382,8 +415,16 @@ export default function MemorialPage() {
               <p className="text-center text-[var(--brand-text)]/45 py-8 text-sm">No photos yet</p>
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                {memorial.photos.map((photo) => (
-                  <figure key={photo.id} className="overflow-hidden rounded-lg bg-white/5">
+                {memorial.photos.map((photo, idx) => (
+                  <figure
+                    key={photo.id}
+                    className="overflow-hidden rounded-lg bg-white/5 cursor-pointer transition hover:ring-2 hover:ring-[var(--brand-accent)]/40"
+                    onClick={() => openLightbox(idx)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openLightbox(idx); }}
+                    aria-label={photo.caption || `View photo of ${memorial.deceasedName}`}
+                  >
                     <div className="aspect-square">
                       <img src={photoUrl(photo.url)} alt={photo.caption || `Memorial photograph for ${memorial.deceasedName}`} className="w-full h-full object-cover" />
                     </div>
@@ -392,6 +433,14 @@ export default function MemorialPage() {
                 ))}
               </div>
             )}
+            <PhotoLightbox
+              images={memorial.photos.map((p) => ({ url: p.url, caption: p.caption }))}
+              currentIndex={lightboxIndex}
+              open={lightboxOpen}
+              onClose={closeLightbox}
+              onNext={nextPhoto}
+              onPrevious={previousPhoto}
+            />
           </div>
         )}
 
@@ -456,6 +505,13 @@ export default function MemorialPage() {
         {activeSection === 'feedback' && (
           <FuneralFeedbackSection slug={memorial.slug} />
         )}
+
+        {activeSection === 'services' && memorial.funeralHome?.slug && (
+          <ServicesSection
+            funeralHomeSlug={memorial.funeralHome.slug}
+            funeralHomeName={displayName}
+          />
+        )}
       </div>
 
       {/* Footer */}
@@ -488,6 +544,23 @@ export default function MemorialPage() {
             </div>
           </div>
         </aside>
+      )}
+
+      {qaMode && memorial && (
+        <AdminQAPanel
+          sections={[
+            { key: 'cover', label: 'Cover image', present: Boolean(memorial.deceasedPhotoUrl || memorial.funeralHome.brand?.memorialHeroUrl) },
+            { key: 'gallery', label: 'Gallery', present: memorial.photos.length > 0 },
+            { key: 'programme', label: 'Programme', present: memorial.programme.length > 0 },
+            { key: 'gps', label: 'GPS', present: memorial.locations && memorial.locations.length > 0 },
+            { key: 'livestream', label: 'Livestream', present: Boolean(memorial.settings?.livestreamUrl) },
+            { key: 'obituary', label: 'Obituary', present: Boolean(memorial.obituary) },
+            { key: 'timeline', label: 'Timeline', present: Boolean(memorial.biography?.timeline && memorial.biography.timeline.length > 0) },
+            { key: 'contacts', label: 'Contacts', present: Boolean(memorial.funeralHome.phone || memorial.funeralHome.email) },
+          ]}
+          memorialId={memorial.id}
+          status={memorial.status}
+        />
       )}
     </div>
     </>
@@ -743,6 +816,44 @@ function TributeSection({ slug, tributes }: { slug: string; tributes: { id: stri
           Thank you. Your tribute has been submitted for review.
         </p>
       )}
+    </div>
+  );
+}
+
+function ServicesSection({ funeralHomeSlug, funeralHomeName }: { funeralHomeSlug: string; funeralHomeName: string }) {
+  const fhUrl = `/fh/${funeralHomeSlug}`;
+  return (
+    <div className="border-t border-[var(--brand-accent)]/20 pt-8">
+      <div className="text-center">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--brand-accent)] mb-3">━━━━━━━━━━━━━━━━━━━━━━━</p>
+        <h2 className="font-display text-2xl text-[var(--brand-text)] mb-1">
+          Services from {funeralHomeName}
+        </h2>
+        <p className="text-sm text-[var(--brand-text)]/60 mb-6">
+          Explore our full range of funeral service options and packages
+        </p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <a
+            href={fhUrl}
+            className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-accent)] px-5 py-2.5 text-sm font-medium text-[var(--brand-primary)] transition hover:opacity-90"
+          >
+            Explore Our Packages <Navigation size={14} />
+          </a>
+          <a
+            href={`${fhUrl}#promotions`}
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-accent)]/30 px-5 py-2.5 text-sm font-medium text-[var(--brand-accent)] transition hover:bg-[var(--brand-accent)]/10"
+          >
+            Current Promotions
+          </a>
+          <a
+            href={`${fhUrl}#contact`}
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-accent)]/30 px-5 py-2.5 text-sm font-medium text-[var(--brand-accent)] transition hover:bg-[var(--brand-accent)]/10"
+          >
+            Contact Our Team
+          </a>
+        </div>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--brand-accent)] mt-6">━━━━━━━━━━━━━━━━━━━━━━━</p>
+      </div>
     </div>
   );
 }

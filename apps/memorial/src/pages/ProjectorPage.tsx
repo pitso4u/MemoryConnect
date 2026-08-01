@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, photoUrl, ProjectorData } from '../lib/api';
 import { brandCssVariables, brandFromFuneralHome } from '../lib/brand';
+import { ProjectorBranding } from '../components/ProjectorBranding';
 
 export const SLIDESHOW_INTERVAL_MS = 8000;
 export const IMAGE_LOAD_TIMEOUT_MS = 7000;
@@ -159,8 +160,8 @@ export default function ProjectorPage() {
 
   if (photoCount === 0) {
     return (
-      <div className="flex min-h-screen select-none flex-col bg-[var(--brand-primary)] p-8 text-[var(--brand-secondary)] sm:p-12" style={brandVars}>
-        {brand.logoUrl && <img src={photoUrl(brand.logoUrl)} alt={`${brand.companyName} logo`} className="mb-6 max-h-16 max-w-56 object-contain" />}
+      <div className="relative flex min-h-screen select-none flex-col bg-[var(--brand-primary)] p-8 text-[var(--brand-secondary)] sm:p-12" style={brandVars}>
+        <ProjectorBranding key={brand.logoUrl || 'no-logo'} brand={brand} />
         <Announcement message={data.announcements[0]?.message} />
         <ProgrammeFocus data={data} />
         <ProgrammeProgress data={data} progress={progress} />
@@ -200,9 +201,6 @@ export default function ProjectorPage() {
           )}
 
           <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/70 to-transparent lg:hidden" />
-          <div className="absolute left-5 top-5 rounded-full border border-white/15 bg-black/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/75 backdrop-blur-md sm:left-8 sm:top-8">
-            {brand.tradingName || brand.companyName}
-          </div>
           <div className="absolute bottom-5 right-5 rounded-full bg-black/40 px-3 py-1.5 text-xs tabular-nums text-white/70 backdrop-blur-md sm:bottom-8 sm:right-8">
             {(displayedPhotoIndex ?? photoIndex) + 1} / {photoCount}
           </div>
@@ -228,6 +226,7 @@ export default function ProjectorPage() {
           </div>
         </aside>
       </div>
+      <ProjectorBranding key={brand.logoUrl || 'no-logo'} brand={brand} />
     </main>
   );
 }

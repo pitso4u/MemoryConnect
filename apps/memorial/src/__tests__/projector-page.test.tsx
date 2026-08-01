@@ -100,4 +100,52 @@ describe('ProjectorPage photo slideshow', () => {
     expect(screen.getByRole('img', { name: 'Photograph unavailable' })).toBeInTheDocument();
     expect(screen.getByText('The slideshow will continue automatically.')).toBeInTheDocument();
   });
+
+  it('shows the funeral home logo and branding footer when configured', async () => {
+    vi.spyOn(api, 'getProjector').mockResolvedValue({
+      ...projector,
+      funeralHome: {
+        name: 'Nomvula Funeral Home',
+        logoUrl: '/uploads/logo.png',
+        footerText: 'Services proudly provided by Nomvula Funeral Home',
+      },
+    });
+    vi.stubGlobal('Image', class {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_url: string) { queueMicrotask(() => this.onload?.()); }
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/nomvula/projector']}>
+        <Routes><Route path="/:slug/projector" element={<ProjectorPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByAltText('Nomvula Funeral Home logo')).toHaveAttribute('src', expect.stringContaining('/uploads/logo.png'));
+    expect(screen.getByText('Services proudly provided by Nomvula Funeral Home')).toBeInTheDocument();
+    expect(screen.queryByText('Nomvula Funeral Home', { selector: 'div' })).not.toBeInTheDocument();
+  });
+
+  it('falls back to the funeral home name when no logo is configured', async () => {
+    vi.spyOn(api, 'getProjector').mockResolvedValue({
+      ...projector,
+      funeralHome: { name: 'Nomvula Funeral Home' },
+    });
+    vi.stubGlobal('Image', class {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_url: string) { queueMicrotask(() => this.onload?.()); }
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/nomvula/projector']}>
+        <Routes><Route path="/:slug/projector" element={<ProjectorPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByText('Nomvula Funeral Home')).toBeInTheDocument();
+  });
 });

@@ -11,10 +11,23 @@ import MemorialDetailPage from './pages/MemorialDetailPage';
 import PaymentsPage from './pages/PaymentsPage';
 import ProfilePage from './pages/ProfilePage';
 import FamilyInvitePage from './pages/FamilyInvitePage';
+import MarketingDashboardPage from './pages/marketing/DashboardPage';
+import BrochuresPage from './pages/marketing/BrochuresPage';
+import BrochureEditorPage from './pages/marketing/BrochureEditorPage';
+import CategoriesPage from './pages/marketing/CategoriesPage';
+import PromotionsPage from './pages/marketing/PromotionsPage';
+import BranchesPage from './pages/marketing/BranchesPage';
+import ContactPage from './pages/marketing/ContactPage';
+import EnquiriesPage from './pages/marketing/EnquiriesPage';
+import AnalyticsPage from './pages/marketing/AnalyticsPage';
+import VehiclesPage from './pages/VehiclesPage';
+import AssetsPage from './pages/AssetsPage';
+import FuneralResourcesPage from './pages/FuneralResourcesPage';
 import {
-  PlatformAnalyticsPage, PlatformAuditLogsPage, PlatformDashboardPage, PlatformFuneralHomeDetailPage,
+  PlatformAnalyticsPage, PlatformAuditLogsPage, PlatformBillingPage, PlatformDashboardPage, PlatformFuneralHomeDetailPage,
   PlatformFuneralHomesPage, PlatformPaymentsPage, PlatformSupportPage, PlatformUsersPage,
 } from './pages/PlatformPages';
+import FeatureManagementPage from './pages/FeatureManagementPage';
 
 function isFamilyRole(role?: string) {
   return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
@@ -48,6 +61,13 @@ function FamilyOnly({ children }: { children: React.ReactNode }) {
 function SuperAdminOnly({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   if (user?.role !== 'SUPER_ADMIN') return <Navigate to={isFamilyRole(user?.role) ? '/family' : '/dashboard'} replace />;
+  return <>{children}</>;
+}
+
+function FeatureOnly({ featureKey, children }: { featureKey: string; children: React.ReactNode }) {
+  const { hasFeature, featuresReady } = useAuth();
+  if (!featuresReady) return <div className="min-h-screen flex items-center justify-center text-muted">Loading...</div>;
+  if (!hasFeature(featureKey)) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
@@ -88,14 +108,29 @@ function AppRoutes() {
         <Route path="family/memorials/:id/biography" element={<FamilyOnly><MemorialDetailPage initialTab="obituary" /></FamilyOnly>} />
         <Route path="family/memorials/:id/programme-suggestions" element={<FamilyOnly><MemorialDetailPage initialTab="programme" /></FamilyOnly>} />
         <Route path="family/memorials/:id/preview" element={<FamilyOnly><MemorialDetailPage /></FamilyOnly>} />
+        <Route path="marketing" element={<FuneralHomeOnly><MarketingDashboardPage /></FuneralHomeOnly>} />
+        <Route path="marketing/brochures" element={<FuneralHomeOnly><FeatureOnly featureKey="BROCHURES"><BrochuresPage /></FeatureOnly></FuneralHomeOnly>} />
+        <Route path="marketing/brochures/new" element={<FuneralHomeOnly><FeatureOnly featureKey="BROCHURES"><BrochureEditorPage /></FeatureOnly></FuneralHomeOnly>} />
+        <Route path="marketing/brochures/:id" element={<FuneralHomeOnly><FeatureOnly featureKey="BROCHURES"><BrochureEditorPage /></FeatureOnly></FuneralHomeOnly>} />
+        <Route path="marketing/categories" element={<FuneralHomeOnly><FeatureOnly featureKey="BROCHURES"><CategoriesPage /></FeatureOnly></FuneralHomeOnly>} />
+        <Route path="marketing/promotions" element={<FuneralHomeOnly><FeatureOnly featureKey="PROMOTIONS"><PromotionsPage /></FeatureOnly></FuneralHomeOnly>} />
+        <Route path="marketing/branches" element={<FuneralHomeOnly><BranchesPage /></FuneralHomeOnly>} />
+        <Route path="marketing/contact" element={<FuneralHomeOnly><ContactPage /></FuneralHomeOnly>} />
+        <Route path="marketing/enquiries" element={<FuneralHomeOnly><EnquiriesPage /></FuneralHomeOnly>} />
+        <Route path="marketing/analytics" element={<FuneralHomeOnly><AnalyticsPage /></FuneralHomeOnly>} />
+        <Route path="vehicles" element={<FuneralHomeOnly><FeatureOnly featureKey="VEHICLES"><VehiclesPage /></FeatureOnly></FuneralHomeOnly>} />
+        <Route path="assets" element={<FuneralHomeOnly><FeatureOnly featureKey="ASSETS"><AssetsPage /></FeatureOnly></FuneralHomeOnly>} />
+        <Route path="funeral-resources" element={<FuneralHomeOnly><FeatureOnly featureKey="FUNERAL_RESOURCES"><FuneralResourcesPage /></FeatureOnly></FuneralHomeOnly>} />
         <Route path="admin-owner" element={<SuperAdminOnly><PlatformDashboardPage /></SuperAdminOnly>} />
         <Route path="admin-owner/funeral-homes" element={<SuperAdminOnly><PlatformFuneralHomesPage /></SuperAdminOnly>} />
         <Route path="admin-owner/funeral-homes/:id" element={<SuperAdminOnly><PlatformFuneralHomeDetailPage /></SuperAdminOnly>} />
         <Route path="admin-owner/payments" element={<SuperAdminOnly><PlatformPaymentsPage /></SuperAdminOnly>} />
+        <Route path="admin-owner/billing" element={<SuperAdminOnly><PlatformBillingPage /></SuperAdminOnly>} />
         <Route path="admin-owner/users" element={<SuperAdminOnly><PlatformUsersPage /></SuperAdminOnly>} />
         <Route path="admin-owner/support" element={<SuperAdminOnly><PlatformSupportPage /></SuperAdminOnly>} />
         <Route path="admin-owner/analytics" element={<SuperAdminOnly><PlatformAnalyticsPage /></SuperAdminOnly>} />
         <Route path="admin-owner/audit-logs" element={<SuperAdminOnly><PlatformAuditLogsPage /></SuperAdminOnly>} />
+        <Route path="admin-owner/features" element={<SuperAdminOnly><FeatureManagementPage /></SuperAdminOnly>} />
         <Route path="platform" element={<Navigate to="/admin-owner" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

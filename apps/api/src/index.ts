@@ -13,6 +13,13 @@ import adminRoutes from './routes/admin';
 import familyRoutes from './routes/family';
 import platformRoutes from './routes/platform';
 import feedbackRoutes from './routes/feedback';
+import marketingRoutes from './routes/marketing';
+import publicMarketingRoutes from './routes/public-marketing';
+import vehicleRoutes from './routes/vehicles';
+import assetRoutes from './routes/assets';
+import funeralResourceRoutes from './routes/funeral-resources';
+import featureRoutes from './routes/features';
+import entitlementRoutes from './routes/entitlement';
 import { prisma } from './lib/prisma';
 import { UPLOADS_DIR } from './lib/uploads';
 import { printServerUrls } from './lib/network';
@@ -130,7 +137,22 @@ app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/family', familyRoutes);
 app.use('/api/v1/platform', platformRoutes);
+app.use('/api/v1/entitlement', entitlementRoutes);
 app.use('/api/v1', feedbackRoutes);
+
+// Marketing Hub routes
+app.use('/api/v1/marketing', marketingRoutes);
+
+// Public Marketing routes
+app.use('/api/v1/public', publicMarketingRoutes);
+
+// Operations routes
+app.use('/api/v1/vehicles', vehicleRoutes);
+app.use('/api/v1/assets', assetRoutes);
+app.use('/api/v1/funeral-resources', funeralResourceRoutes);
+
+// Feature management routes (platform owner)
+app.use('/api/v1/platform/features', featureRoutes);
 
 // Legacy routes for backward compatibility (will be deprecated)
 app.use('/api/auth', authLimiter, authRoutes);

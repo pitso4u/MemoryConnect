@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, Memorial, FuneralContactEnquiry } from '../lib/api';
-import { Plus, Calendar, MapPin, Phone, Mail, User, MessageSquare } from 'lucide-react';
+import { Plus, Calendar, MapPin, Phone, Mail, User, MessageSquare, ExternalLink, Copy, QrCode, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import QRPreviewModal from '../components/memorial/QRPreviewModal';
 
 function isFamilyRole(role?: string) {
   return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
@@ -106,6 +107,10 @@ export default function MemorialsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'ALL' | 'DRAFT' | 'PAID_PENDING' | 'PUBLISHED' | 'LOCKED' | 'EXPIRED'>('ALL');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [qrModal, setQrModal] = useState<{ open: boolean; url: string; slug: string; deceasedName: string }>({
+    open: false, url: '', slug: '', deceasedName: '',
+  });
 
   useEffect(() => {
     api.getMemorials()
@@ -113,6 +118,8 @@ export default function MemorialsPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load memorials'))
       .finally(() => setLoading(false));
   }, []);
+
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const statusColor: Record<string, string> = {
     DRAFT: 'bg-amber-100 text-amber-800',
@@ -124,6 +131,32 @@ export default function MemorialsPage() {
 
   const visibleMemorials = filter === 'ALL' ? memorials : memorials.filter((m) => m.status === filter);
   const familyUser = isFamilyRole(user?.role);
+
+  const handlePreviewPublic = async (m: Memorial) => {
+    try {
+      const data = await api.getMemorialPublicUrl(m.id);
+      window.open(data.publicUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      // Fallback: open without QA token
+      window.open(`https://memoryconnect.co.za/${m.slug}`, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleCopyUrl = async (m: Memorial) => {
+    const url = `https://memoryconnect.co.za/${m.slug}`;
+    await navigator.clipboard.writeText(url);
+    setCopiedId(m.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handlePreviewQR = async (m: Memorial) => {
+    try {
+      const data = await api.getMemorialPublicUrl(m.id);
+      setQrModal({ open: true, url: data.qrCodeUrl, slug: m.slug, deceasedName: m.deceasedName });
+    } catch {
+      setQrModal({ open: true, url: `https://memoryconnect.co.za/${m.slug}`, slug: m.slug, deceasedName: m.deceasedName });
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -177,16 +210,20 @@ export default function MemorialsPage() {
       ) : (
         <div className="grid gap-4">
           {visibleMemorials.map((m) => (
-            <Link
+            <div
               key={m.id}
-              to={familyUser ? `/family/memorials/${m.id}` : `/memorial/${m.id}`}
-              className="group block rounded-xl border border-parchment-dark bg-white p-4 transition hover:border-gold/30 hover:shadow-md sm:p-6"
+              className="block rounded-xl border border-parchment-dark bg-white p-4 transition hover:border-gold/30 hover:shadow-md sm:p-6"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h2 className="font-display text-xl text-ink group-hover:text-gold-dark transition">
-                    {m.deceasedName}
-                  </h2>
+                  <Link
+                    to={familyUser ? `/family/memorials/${m.id}` : `/memorial/${m.id}`}
+                    className="hover:text-gold-dark transition"
+                  >
+                    <h2 className="font-display text-xl text-ink">
+                      {m.deceasedName}
+                    </h2>
+                  </Link>
                   <div className="mt-2 flex flex-col gap-1 text-sm text-muted sm:flex-row sm:flex-wrap sm:gap-4">
                     {m.serviceDate && (
                       <span className="flex items-center gap-1">
@@ -218,10 +255,46 @@ export default function MemorialsPage() {
                 )}
                 <span className="ml-3">{m.viewCount || 0} views</span>
               </p>
-            </Link>
+              {isSuperAdmin && (
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-parchment-dark pt-3">
+                  <button
+                    type="button"
+                    onClick={() => handlePreviewPublic(m)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-parchment-dark px-3 py-1.5 text-xs font-medium text-muted transition hover:bg-parchment hover:text-ink"
+                  >
+                    <ExternalLink size={13} />
+                    Preview Public
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyUrl(m)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-parchment-dark px-3 py-1.5 text-xs font-medium text-muted transition hover:bg-parchment hover:text-ink"
+                  >
+                    {copiedId === m.id ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
+                    {copiedId === m.id ? 'Copied' : 'Copy URL'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePreviewQR(m)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-parchment-dark px-3 py-1.5 text-xs font-medium text-muted transition hover:bg-parchment hover:text-ink"
+                  >
+                    <QrCode size={13} />
+                    Preview QR
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
+
+      <QRPreviewModal
+        open={qrModal.open}
+        onClose={() => setQrModal({ ...qrModal, open: false })}
+        url={qrModal.url}
+        slug={qrModal.slug}
+        deceasedName={qrModal.deceasedName}
+      />
     </div>
   );
 }

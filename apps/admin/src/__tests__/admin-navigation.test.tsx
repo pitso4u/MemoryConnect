@@ -3,17 +3,20 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import DashboardLayout from '../components/DashboardLayout';
 import { AuthProvider } from '../context/AuthContext';
+import { BrandProvider } from '../context/BrandContext';
 
 describe('DashboardLayout navigation', () => {
   it('uses a collapsible mobile menu while keeping page content in normal flow', () => {
     const { container } = render(
       <MemoryRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/" element={<DashboardLayout />}>
-              <Route index element={<div>Admin page content</div>} />
-            </Route>
-          </Routes>
+          <BrandProvider>
+            <Routes>
+              <Route path="/" element={<DashboardLayout />}>
+                <Route index element={<div>Admin page content</div>} />
+              </Route>
+            </Routes>
+          </BrandProvider>
         </AuthProvider>
       </MemoryRouter>,
     );

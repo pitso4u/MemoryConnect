@@ -38,3 +38,17 @@ export function getMemorialBaseUrl(demoNetworkUrl?: string): string {
 export function memorialPageUrl(slug: string, demoNetworkUrl?: string): string {
   return `${getMemorialBaseUrl(demoNetworkUrl)}/${slug}`;
 }
+
+/**
+ * Canonical public base URL used for QR posters and shareable links.
+ * Never falls back to localhost: guests must be able to open the link.
+ */
+export function getPosterBaseUrl(): string {
+  const fromEnv = import.meta.env.VITE_MEMORIAL_URL;
+  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  return 'https://memoryconnect.co.za';
+}
+
+export function memorialPosterUrl(slug: string): string {
+  return `${getPosterBaseUrl()}/${slug}`;
+}

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CreditCard, Globe, Monitor, Trash2 } from 'lucide-react';
+import { ArrowLeft, CreditCard, Globe, Monitor, Trash2, Gift } from 'lucide-react';
 import { api, MemorialDetail } from '../../lib/api';
 import { getMemorialBaseUrl, memorialPageUrl } from '../../lib/config';
+import type { EntitlementSnapshot } from '@memorialconnect/shared';
 
 interface MemorialHeaderProps {
   memorial: MemorialDetail;
@@ -12,11 +13,20 @@ interface MemorialHeaderProps {
   canDelete: boolean;
 }
 
+const money = (cents: number, currency = 'ZAR') =>
+  new Intl.NumberFormat('en-ZA', { style: 'currency', currency }).format(cents / 100);
+
 export function MemorialHeader({ memorial, saving, onPublish, onDelete, canDelete }: MemorialHeaderProps) {
   const [openingPreview, setOpeningPreview] = useState<'page' | 'projector' | null>(null);
   const [previewError, setPreviewError] = useState('');
+  const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
   const guestBaseUrl = getMemorialBaseUrl();
   const guestMemorialUrl = memorialPageUrl(memorial.slug);
+
+  useEffect(() => {
+    if (!['DRAFT', 'PAID_PENDING'].includes(memorial.status)) return;
+    api.getEntitlementStatus().then(setEntitlement).catch(() => setEntitlement(null));
+  }, [memorial.status, memorial.id]);
 
   const openPreview = async (mode: 'page' | 'projector') => {
     setPreviewError('');
@@ -47,6 +57,20 @@ export function MemorialHeader({ memorial, saving, onPublish, onDelete, canDelet
     } finally {
       setOpeningPreview(null);
     }
+  };
+
+  const publishLabel = () => {
+    if (saving) return 'Publishing…';
+    if (memorial.status === 'PUBLISHED' || memorial.status === 'LOCKED') return 'Published';
+    if (memorial.status === 'EXPIRED') return 'Viewing ended';
+    if (entitlement?.mode === 'TRIAL') {
+      const { freeMemorialsUsed, freeMemorialLimit } = entitlement.trial;
+      return `Publish free (${freeMemorialsUsed} of ${freeMemorialLimit} trial)`;
+    }
+    if (entitlement?.mode === 'CREDITS') {
+      return `Publish (1 credit · ${entitlement.creditsRemaining} left)`;
+    }
+    return `Publish for ${money(entitlement?.singleMemorialPriceCents ?? 29999, entitlement?.currency ?? 'ZAR')}`;
   };
 
   return (
@@ -94,8 +118,8 @@ export function MemorialHeader({ memorial, saving, onPublish, onDelete, canDelet
             className="col-span-2 flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-parchment transition hover:bg-ink-light disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1"
             disabled={saving || !['DRAFT', 'PAID_PENDING'].includes(memorial.status)}
           >
-            <CreditCard size={16} />
-            {saving ? 'Opening Paystack...' : memorial.status === 'PUBLISHED' || memorial.status === 'LOCKED' ? 'Published' : memorial.status === 'EXPIRED' ? 'Viewing ended' : 'Publish for R299.99'}
+            {entitlement?.mode === 'TRIAL' ? <Gift size={16} /> : <CreditCard size={16} />}
+            {publishLabel()}
           </button>
         </div>
       </div>

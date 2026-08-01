@@ -152,3 +152,28 @@ export function verifyPreviewToken(token?: string): PreviewPayload | null {
     return null;
   }
 }
+
+export interface QAPayload {
+  kind: 'qa_access';
+  userId: string;
+  role: 'SUPER_ADMIN';
+  memorialId: string;
+}
+
+export function signQAToken(userId: string, memorialId: string): string {
+  return jwt.sign(
+    { kind: 'qa_access', userId, role: 'SUPER_ADMIN', memorialId } satisfies QAPayload,
+    env.JWT_SECRET,
+    { expiresIn: '1h' },
+  );
+}
+
+export function verifyQAToken(token?: string): QAPayload | null {
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, env.JWT_SECRET) as QAPayload;
+    return payload.kind === 'qa_access' && payload.role === 'SUPER_ADMIN' ? payload : null;
+  } catch {
+    return null;
+  }
+}

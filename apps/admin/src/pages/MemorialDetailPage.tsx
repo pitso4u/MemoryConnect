@@ -128,6 +128,16 @@ export default function MemorialDetailPage({ initialTab = 'programme' }: { initi
     setPublishError('');
     try {
       const checkout = await api.initializePublishPayment(id);
+      if (checkout.free && checkout.memorial) {
+        setMemorial(checkout.memorial);
+        setPaymentMessage(checkout.mode === 'TRIAL'
+          ? 'Published free with your trial. This funeral is now public.'
+          : 'Published using a prepaid credit. This funeral is now public.');
+        return;
+      }
+      if (!checkout.authorizationUrl) {
+        throw new Error('No payment checkout URL was returned');
+      }
       window.location.assign(checkout.authorizationUrl);
     } catch (err) {
       setPublishError(err instanceof Error ? err.message : 'Could not update publishing status');
@@ -562,8 +572,12 @@ export default function MemorialDetailPage({ initialTab = 'programme' }: { initi
       {!familyUser && ['PUBLISHED', 'LOCKED'].includes(memorial.status) && <MemorialQrCode
         slug={memorial.slug}
         deceasedName={memorial.deceasedName}
+        deceasedPhotoUrl={memorial.deceasedPhotoUrl}
         demoNetworkUrl={demoNetworkUrl}
         onSaveDemoUrl={saveDemoNetworkUrl}
+        serviceDate={memorial.serviceDate}
+        serviceVenue={memorial.serviceVenue}
+        timezone={memorial.timezone}
       />}
 
       {analytics && (

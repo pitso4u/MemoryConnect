@@ -50,10 +50,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export interface PublicMemorial extends Omit<Memorial, 'funeralHome'> {
+  serviceEndTime?: string;
+  timezone?: string;
   isPreview?: boolean;
+  qrPosterUrl?: string;
   funeralHome: {
     id?: string;
     name: string;
+    slug?: string;
     phone?: string;
     email?: string;
     address?: string;
@@ -122,3 +126,141 @@ export interface FuneralFeedbackInput {
   phone?: string | null;
   email?: string | null;
 }
+
+// ── Marketing Hub Public API ──────────────────────────────────────────────
+
+export interface MarketingContactPublic {
+  businessName?: string | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  description?: string | null;
+  address?: string | null;
+  telephone?: string | null;
+  mobile?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  website?: string | null;
+  businessHours?: string | null;
+  googleMapsUrl?: string | null;
+  facebook?: string | null;
+  instagram?: string | null;
+  tiktok?: string | null;
+  linkedin?: string | null;
+  enableBrochures: boolean;
+  enableContact: boolean;
+  enableBranches: boolean;
+  enablePromotions: boolean;
+}
+
+export interface BrochureCategoryPublic {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+}
+
+export interface BrochureGalleryPublic {
+  id: string;
+  url: string;
+  caption?: string | null;
+  displayOrder: number;
+}
+
+export interface BrochurePublic {
+  id: string;
+  title: string;
+  slug: string;
+  coverImageUrl?: string | null;
+  description?: string | null;
+  pdfUrl?: string | null;
+  ctaEnabled: boolean;
+  ctaText?: string | null;
+  ctaUrl?: string | null;
+  whatsappNumber?: string | null;
+  phoneNumber?: string | null;
+  emailAddress?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  viewCount: number;
+  category?: BrochureCategoryPublic | null;
+  gallery?: BrochureGalleryPublic[];
+}
+
+export interface PromotionPublic {
+  id: string;
+  title: string;
+  bannerImageUrl?: string | null;
+  description?: string | null;
+  startDate: string;
+  endDate: string;
+  buttonText?: string | null;
+  buttonUrl?: string | null;
+  active: boolean;
+}
+
+export interface BranchPublic {
+  id: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  whatsapp?: string | null;
+  manager?: string | null;
+  businessHours?: string | null;
+  googleMapsUrl?: string | null;
+}
+
+export interface FuneralHomeMarketingPage {
+  funeralHome: {
+    id: string;
+    name: string;
+    slug?: string | null;
+    tradingName?: string | null;
+    logoUrl?: string | null;
+    phone?: string | null;
+    brand?: BrandProfile;
+  };
+  contact: MarketingContactPublic | null;
+  brochures: BrochurePublic[];
+  promotions: PromotionPublic[];
+  branches: BranchPublic[];
+}
+
+export interface BrochureDetailPage {
+  brochure: BrochurePublic;
+  funeralHome: {
+    id: string;
+    name: string;
+    slug?: string | null;
+    tradingName?: string | null;
+    logoUrl?: string | null;
+    brand?: BrandProfile;
+  } | null;
+  contact: MarketingContactPublic | null;
+}
+
+// Add marketing methods to the api object
+export const marketingApi = {
+  getFuneralHomePage: (slug: string) =>
+    request<FuneralHomeMarketingPage>(`/api/v1/public/funeral-homes/${encodeURIComponent(slug)}`),
+
+  getBrochure: (slug: string) =>
+    request<BrochureDetailPage>(`/api/v1/public/brochures/${encodeURIComponent(slug)}`),
+
+  submitEnquiry: (slug: string, data: { fullName: string; phoneNumber?: string | null; emailAddress?: string | null; message?: string | null }) =>
+    request<{ id: string }>(`/api/v1/public/brochures/${encodeURIComponent(slug)}/enquiry`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  trackAnalytics: (data: { eventType: string; brochureId?: string | null; visitorId?: string | null }) =>
+    request<{ tracked: boolean }>('/api/v1/public/analytics/track', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};

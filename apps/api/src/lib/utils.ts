@@ -21,9 +21,12 @@ export function formatMemorial(memorial: Record<string, unknown>) {
     serviceDate: memorial.serviceDate
       ? (memorial.serviceDate as Date).toISOString()
       : undefined,
+    serviceEndTime: memorial.serviceEndTime,
     serviceVenue: memorial.serviceVenue,
+    timezone: memorial.timezone,
     deceasedPhotoUrl: memorial.deceasedPhotoUrl,
     logoUrl: memorial.logoUrl,
+    qrPosterUrl: memorial.qrPosterUrl,
     obituary: memorial.obituary,
     biography: memorial.biography,
     programme: memorial.programme,

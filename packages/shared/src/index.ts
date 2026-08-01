@@ -193,7 +193,9 @@ export interface MemorialSummary {
   dateOfBirth?: string;
   dateOfDeath?: string;
   serviceDate?: string;
+  serviceEndTime?: string;
   serviceVenue?: string;
+  timezone?: string;
   deceasedPhotoUrl?: string;
   status: MemorialStatus;
   isDemo?: boolean;
@@ -231,6 +233,52 @@ export interface PublishPayment {
   amountCents: 29999;
   currency: 'ZAR';
   purpose: 'FUNERAL_PUBLISH';
+  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'ABANDONED';
+  paystackReference: string;
+  paidAt?: string | null;
+  createdAt: string;
+}
+
+export interface CreditBundle {
+  credits: number;
+  priceCents: number;
+}
+
+export interface PlatformCommercialSettings {
+  trialEnabled: boolean;
+  trialDays: number;
+  freeMemorialLimit: number;
+  singleMemorialPriceCents: number;
+  currency: string;
+  subscriptionsEnabled: boolean;
+  creditBundles: CreditBundle[];
+}
+
+export interface EntitlementSnapshot {
+  mode: 'TRIAL' | 'CREDITS' | 'PAY_AS_YOU_GO';
+  trial: {
+    active: boolean;
+    startedAt: string | null;
+    endsAt: string | null;
+    daysRemaining: number | null;
+    freeMemorialsUsed: number;
+    freeMemorialLimit: number;
+  };
+  creditsRemaining: number;
+  creditsPurchased: number;
+  lastCreditPurchaseAt: string | null;
+  singleMemorialPriceCents: number;
+  currency: string;
+  bundles: CreditBundle[];
+  subscriptionsEnabled: boolean;
+}
+
+export interface MemorialCreditPurchase {
+  id: string;
+  funeralHomeId: string;
+  credits: number;
+  amountCents: number;
+  currency: string;
   status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'ABANDONED';
   paystackReference: string;
   paidAt?: string | null;
@@ -389,6 +437,12 @@ export interface FuneralHome {
   analyticsAccessEnabled: boolean;
   apiAccessEnabled: boolean;
   dedicatedSupportEnabled: boolean;
+  trialStartsAt?: string | Date | null;
+  trialEndsAt?: string | Date | null;
+  trialMemorialsUsed?: number;
+  memorialCreditsPurchased?: number;
+  memorialCreditsRemaining?: number;
+  lastCreditPurchaseAt?: string | Date | null;
 }
 
 /**
@@ -496,7 +550,9 @@ export const loginSchema = z.object({
 export const createMemorialSchema = z.object({
   deceasedName: z.string().min(2, 'Deceased name is required'),
   serviceDate: z.string().optional(),
+  serviceEndTime: z.string().optional(),
   serviceVenue: z.string().optional(),
+  timezone: z.string().optional(),
   logoUrl: z.string().regex(/^(https?:\/\/|\/)/).optional().or(z.literal('')),
 });
 
@@ -508,7 +564,9 @@ export const updateMemorialSchema = z.object({
   dateOfBirth: z.string().optional(),
   dateOfDeath: z.string().optional(),
   serviceDate: z.string().optional(),
+  serviceEndTime: z.string().optional(),
   serviceVenue: z.string().optional(),
+  timezone: z.string().optional(),
   deceasedPhotoUrl: z.string().url().optional().or(z.literal('')).nullable(),
   logoUrl: z.string().regex(/^(https?:\/\/|\/)/).optional().or(z.literal('')).nullable(),
   obituary: z.string().optional(),
@@ -594,3 +652,724 @@ export const funeralFeedbackSchema = z.object({
 });
 
 export type FuneralFeedbackInput = z.infer<typeof funeralFeedbackSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Marketing Hub — Types & Schemas
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface MarketingContact {
+  id: string;
+  funeralHomeId: string;
+  businessName?: string | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  description?: string | null;
+  address?: string | null;
+  telephone?: string | null;
+  mobile?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  website?: string | null;
+  businessHours?: string | null;
+  googleMapsUrl?: string | null;
+  facebook?: string | null;
+  instagram?: string | null;
+  tiktok?: string | null;
+  linkedin?: string | null;
+  enableBrochures: boolean;
+  enableContact: boolean;
+  enableBranches: boolean;
+  enablePromotions: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BrochureCategory {
+  id: string;
+  funeralHomeId: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  displayOrder: number;
+  isDefault: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BrochureGalleryItem {
+  id: string;
+  brochureId: string;
+  url: string;
+  caption?: string | null;
+  displayOrder: number;
+}
+
+export interface Brochure {
+  id: string;
+  funeralHomeId: string;
+  categoryId?: string | null;
+  category?: BrochureCategory | null;
+  title: string;
+  slug: string;
+  coverImageUrl?: string | null;
+  description?: string | null;
+  pdfUrl?: string | null;
+  ctaEnabled: boolean;
+  ctaText?: string | null;
+  ctaUrl?: string | null;
+  whatsappNumber?: string | null;
+  phoneNumber?: string | null;
+  emailAddress?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  published: boolean;
+  featured: boolean;
+  displayOrder: number;
+  viewCount: number;
+  shortUrl?: string | null;
+  gallery?: BrochureGalleryItem[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Promotion {
+  id: string;
+  funeralHomeId: string;
+  title: string;
+  bannerImageUrl?: string | null;
+  description?: string | null;
+  startDate: string;
+  endDate: string;
+  buttonText?: string | null;
+  buttonUrl?: string | null;
+  published: boolean;
+  active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MarketingBranch {
+  id: string;
+  funeralHomeId: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  whatsapp?: string | null;
+  manager?: string | null;
+  businessHours?: string | null;
+  googleMapsUrl?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Enquiry {
+  id: string;
+  brochureId: string;
+  funeralHomeId: string;
+  fullName: string;
+  phoneNumber?: string | null;
+  emailAddress?: string | null;
+  message?: string | null;
+  brochure?: { title: string; slug: string };
+  createdAt: string;
+}
+
+export interface MarketingAnalytics {
+  totalViews: number;
+  totalUniqueVisitors: number;
+  totalQrScans: number;
+  totalPdfDownloads: number;
+  totalPhoneClicks: number;
+  totalWhatsappClicks: number;
+  totalCtaClicks: number;
+  totalEnquiries: number;
+  conversionRate: number;
+  viewsByDay: Array<{ date: string; count: number }>;
+  brochureViews: Array<{ id: string; title: string; slug: string; viewCount: number }>;
+}
+
+export interface MarketingDashboard {
+  totalBrochures: number;
+  publishedBrochures: number;
+  totalPromotions: number;
+  activePromotions: number;
+  totalEnquiries: number;
+  totalBranches: number;
+  totalViews: number;
+  recentEnquiries: Enquiry[];
+  contactConfigured: boolean;
+}
+
+// ── Zod Schemas ──────────────────────────────────────────────────────────────
+
+export const updateMarketingContactSchema = z.object({
+  businessName: z.string().max(200).optional().nullable(),
+  logoUrl: z.string().optional().nullable(),
+  coverImageUrl: z.string().optional().nullable(),
+  description: z.string().max(5000).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+  telephone: z.string().max(50).optional().nullable(),
+  mobile: z.string().max(50).optional().nullable(),
+  whatsapp: z.string().max(50).optional().nullable(),
+  email: z.string().email().optional().nullable().or(z.literal('')),
+  website: z.string().max(500).optional().nullable(),
+  businessHours: z.string().max(1000).optional().nullable(),
+  googleMapsUrl: z.string().max(1000).optional().nullable(),
+  facebook: z.string().max(500).optional().nullable(),
+  instagram: z.string().max(500).optional().nullable(),
+  tiktok: z.string().max(500).optional().nullable(),
+  linkedin: z.string().max(500).optional().nullable(),
+  enableBrochures: z.boolean().optional(),
+  enableContact: z.boolean().optional(),
+  enableBranches: z.boolean().optional(),
+  enablePromotions: z.boolean().optional(),
+});
+
+export type UpdateMarketingContactInput = z.infer<typeof updateMarketingContactSchema>;
+
+export const createBrochureCategorySchema = z.object({
+  name: z.string().min(1, 'Category name is required').max(100),
+  slug: z.string().max(200).optional(),
+  description: z.string().max(500).optional().nullable(),
+  displayOrder: z.number().int().min(0).optional(),
+});
+
+export const updateBrochureCategorySchema = createBrochureCategorySchema.partial();
+
+export type CreateBrochureCategoryInput = z.infer<typeof createBrochureCategorySchema>;
+export type UpdateBrochureCategoryInput = z.infer<typeof updateBrochureCategorySchema>;
+
+export const createBrochureSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(300),
+  slug: z.string().max(300).optional(),
+  categoryId: z.string().optional().nullable(),
+  coverImageUrl: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  pdfUrl: z.string().optional().nullable(),
+  ctaEnabled: z.boolean().optional(),
+  ctaText: z.string().max(100).optional().nullable(),
+  ctaUrl: z.string().max(1000).optional().nullable(),
+  whatsappNumber: z.string().max(50).optional().nullable(),
+  phoneNumber: z.string().max(50).optional().nullable(),
+  emailAddress: z.string().email().optional().nullable().or(z.literal('')),
+  seoTitle: z.string().max(200).optional().nullable(),
+  seoDescription: z.string().max(400).optional().nullable(),
+  published: z.boolean().optional(),
+  featured: z.boolean().optional(),
+  displayOrder: z.number().int().min(0).optional(),
+  gallery: z.array(z.object({
+    url: z.string(),
+    caption: z.string().optional().nullable(),
+    displayOrder: z.number().int().min(0).optional(),
+  })).optional(),
+});
+
+export const updateBrochureSchema = createBrochureSchema.partial();
+
+export type CreateBrochureInput = z.infer<typeof createBrochureSchema>;
+export type UpdateBrochureInput = z.infer<typeof updateBrochureSchema>;
+
+export const createPromotionSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(300),
+  bannerImageUrl: z.string().optional().nullable(),
+  description: z.string().max(5000).optional().nullable(),
+  startDate: z.string().refine((v) => !isNaN(Date.parse(v)), 'Invalid start date'),
+  endDate: z.string().refine((v) => !isNaN(Date.parse(v)), 'Invalid end date'),
+  buttonText: z.string().max(100).optional().nullable(),
+  buttonUrl: z.string().max(1000).optional().nullable(),
+  published: z.boolean().optional(),
+});
+
+export const updatePromotionSchema = createPromotionSchema.partial();
+
+export type CreatePromotionInput = z.infer<typeof createPromotionSchema>;
+export type UpdatePromotionInput = z.infer<typeof updatePromotionSchema>;
+
+export const createBranchSchema = z.object({
+  name: z.string().min(1, 'Branch name is required').max(200),
+  phone: z.string().max(50).optional().nullable(),
+  email: z.string().email().optional().nullable().or(z.literal('')),
+  address: z.string().max(500).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  province: z.string().max(100).optional().nullable(),
+  country: z.string().max(100).optional().nullable(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  whatsapp: z.string().max(50).optional().nullable(),
+  manager: z.string().max(200).optional().nullable(),
+  businessHours: z.string().max(1000).optional().nullable(),
+  googleMapsUrl: z.string().max(1000).optional().nullable(),
+});
+
+export const updateBranchSchema = createBranchSchema.partial();
+
+export type CreateBranchInput = z.infer<typeof createBranchSchema>;
+export type UpdateBranchInput = z.infer<typeof updateBranchSchema>;
+
+export const enquirySchema = z.object({
+  fullName: z.string().min(1, 'Name is required').max(200),
+  phoneNumber: z.string().max(50).optional().nullable(),
+  emailAddress: z.string().email().optional().nullable().or(z.literal('')),
+  message: z.string().max(5000).optional().nullable(),
+});
+
+export type EnquiryInput = z.infer<typeof enquirySchema>;
+
+export const analyticsEventSchema = z.object({
+  eventType: z.enum(['page_view', 'qr_scan', 'pdf_download', 'phone_click', 'whatsapp_click', 'cta_click', 'enquiry']),
+  brochureId: z.string().optional().nullable(),
+  metadata: z.string().optional().nullable(),
+  visitorId: z.string().optional().nullable(),
+});
+
+export type AnalyticsEventInput = z.infer<typeof analyticsEventSchema>;
+
+// ── Vehicle Types ──────────────────────────────────────────────────────────
+
+export const VEHICLE_TYPES = ['Hearse', 'Family Car', 'Minibus', 'Truck', 'Utility'] as const;
+export const VEHICLE_STATUSES = ['Available', 'Booked', 'Maintenance', 'Inactive'] as const;
+
+export const createVehicleSchema = z.object({
+  name: z.string().min(1).max(200),
+  registrationNumber: z.string().min(1).max(50),
+  vehicleType: z.enum(VEHICLE_TYPES),
+  manufacturer: z.string().max(100).optional().nullable(),
+  model: z.string().max(100).optional().nullable(),
+  year: z.number().int().min(1900).max(2100).optional().nullable(),
+  vin: z.string().max(50).optional().nullable(),
+  colour: z.string().max(50).optional().nullable(),
+  capacity: z.number().int().min(1).optional().nullable(),
+  currentMileage: z.number().int().min(0).optional().nullable(),
+  fuelType: z.string().max(50).optional().nullable(),
+  transmission: z.string().max(50).optional().nullable(),
+  status: z.enum(VEHICLE_STATUSES).optional(),
+  assignedDriver: z.string().max(200).optional().nullable(),
+  insuranceCompany: z.string().max(200).optional().nullable(),
+  insuranceNumber: z.string().max(100).optional().nullable(),
+  insuranceExpiry: z.string().optional().nullable(),
+  roadworthyExpiry: z.string().optional().nullable(),
+  licenseDiskExpiry: z.string().optional().nullable(),
+  nextServiceDate: z.string().optional().nullable(),
+  notes: z.string().max(5000).optional().nullable(),
+});
+
+export const updateVehicleSchema = createVehicleSchema.partial();
+
+export type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
+export type UpdateVehicleInput = z.infer<typeof updateVehicleSchema>;
+
+export const createServiceHistorySchema = z.object({
+  serviceDate: z.string().refine((v) => !isNaN(Date.parse(v)), 'Invalid date'),
+  description: z.string().max(2000).optional().nullable(),
+  mileageAtService: z.number().int().min(0).optional().nullable(),
+  cost: z.number().min(0).optional().nullable(),
+  provider: z.string().max(200).optional().nullable(),
+  nextServiceDate: z.string().optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+export type CreateServiceHistoryInput = z.infer<typeof createServiceHistorySchema>;
+
+export const createFuelLogSchema = z.object({
+  date: z.string().refine((v) => !isNaN(Date.parse(v)), 'Invalid date'),
+  amount: z.number().min(0, 'Amount must be positive'),
+  cost: z.number().min(0, 'Cost must be positive'),
+  mileage: z.number().int().min(0).optional().nullable(),
+  fuelType: z.string().max(50).optional().nullable(),
+  station: z.string().max(200).optional().nullable(),
+  receiptUrl: z.string().max(1000).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+export type CreateFuelLogInput = z.infer<typeof createFuelLogSchema>;
+
+export const createMaintenanceLogSchema = z.object({
+  date: z.string().refine((v) => !isNaN(Date.parse(v)), 'Invalid date'),
+  type: z.string().min(1).max(100),
+  description: z.string().max(5000).optional().nullable(),
+  cost: z.number().min(0).optional().nullable(),
+  provider: z.string().max(200).optional().nullable(),
+  mileageAtService: z.number().int().min(0).optional().nullable(),
+  nextServiceDue: z.string().optional().nullable(),
+  status: z.enum(['Scheduled', 'InProgress', 'Completed', 'Cancelled']).optional(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+export type CreateMaintenanceLogInput = z.infer<typeof createMaintenanceLogSchema>;
+
+// ── Asset Types ────────────────────────────────────────────────────────────
+
+export const ASSET_CATEGORIES = [
+  'Tent', 'Chair', 'Table', 'Stretcher', 'Lowering Device', 'Sound System',
+  'Generator', 'Coffin Trolley', 'Gazebo', 'Flowers', 'Flags', 'Display Screen',
+  'Projector', 'Lighting', 'Office Equipment',
+] as const;
+
+export const ASSET_CONDITIONS = ['Excellent', 'Good', 'Needs Repair', 'Broken'] as const;
+export const ASSET_STATUSES = ['Available', 'Reserved', 'In Use', 'Maintenance', 'Retired'] as const;
+
+export const createAssetSchema = z.object({
+  name: z.string().min(1).max(200),
+  category: z.string().min(1),
+  serialNumber: z.string().max(100).optional().nullable(),
+  barcodeQrCode: z.string().max(200).optional().nullable(),
+  purchaseDate: z.string().optional().nullable(),
+  purchasePrice: z.number().min(0).optional().nullable(),
+  supplier: z.string().max(200).optional().nullable(),
+  warrantyExpiry: z.string().optional().nullable(),
+  currentLocation: z.string().max(500).optional().nullable(),
+  branchId: z.string().optional().nullable(),
+  condition: z.enum(ASSET_CONDITIONS).optional(),
+  status: z.enum(ASSET_STATUSES).optional(),
+  assignedEmployee: z.string().max(200).optional().nullable(),
+  notes: z.string().max(5000).optional().nullable(),
+});
+
+export const updateAssetSchema = createAssetSchema.partial();
+
+export type CreateAssetInput = z.infer<typeof createAssetSchema>;
+export type UpdateAssetInput = z.infer<typeof updateAssetSchema>;
+
+export const createDamageReportSchema = z.object({
+  reportedBy: z.string().max(200).optional().nullable(),
+  date: z.string().refine((v) => !isNaN(Date.parse(v)), 'Invalid date').optional(),
+  description: z.string().min(1).max(5000),
+  severity: z.enum(['Minor', 'Moderate', 'Major', 'Critical']).optional(),
+  status: z.enum(['Open', 'Investigating', 'Resolved', 'Closed']).optional(),
+  cost: z.number().min(0).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+export type CreateDamageReportInput = z.infer<typeof createDamageReportSchema>;
+
+// ── Funeral Resource Reservation Types ─────────────────────────────────────
+
+export const RESERVATION_STATUSES = ['Reserved', 'CheckedOut', 'Returned', 'Cancelled'] as const;
+
+export const createReservationSchema = z.object({
+  memorialId: z.string().min(1),
+  vehicleId: z.string().optional().nullable(),
+  assetId: z.string().optional().nullable(),
+  quantity: z.number().int().min(1).optional(),
+  reservedBy: z.string().max(200).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+export type CreateReservationInput = z.infer<typeof createReservationSchema>;
+
+export interface Vehicle {
+  id: string;
+  funeralHomeId: string;
+  name: string;
+  registrationNumber: string;
+  vehicleType: string;
+  manufacturer: string | null;
+  model: string | null;
+  year: number | null;
+  vin: string | null;
+  colour: string | null;
+  capacity: number | null;
+  currentMileage: number | null;
+  fuelType: string | null;
+  transmission: string | null;
+  status: string;
+  assignedDriver: string | null;
+  insuranceCompany: string | null;
+  insuranceNumber: string | null;
+  insuranceExpiry: string | null;
+  roadworthyExpiry: string | null;
+  licenseDiskExpiry: string | null;
+  nextServiceDate: string | null;
+  notes: string | null;
+  photos: VehiclePhoto[];
+  documents: VehicleDocument[];
+  serviceHistories: ServiceHistory[];
+  fuelLogs: FuelLog[];
+  maintenanceLogs: MaintenanceLog[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VehiclePhoto {
+  id: string;
+  vehicleId: string;
+  url: string;
+  caption: string | null;
+}
+
+export interface VehicleDocument {
+  id: string;
+  vehicleId: string;
+  name: string;
+  url: string;
+  type: string | null;
+}
+
+export interface ServiceHistory {
+  id: string;
+  vehicleId: string;
+  serviceDate: string;
+  description: string | null;
+  mileageAtService: number | null;
+  cost: number | null;
+  provider: string | null;
+  nextServiceDate: string | null;
+  notes: string | null;
+}
+
+export interface FuelLog {
+  id: string;
+  vehicleId: string;
+  date: string;
+  amount: number;
+  cost: number;
+  mileage: number | null;
+  fuelType: string | null;
+  station: string | null;
+  receiptUrl: string | null;
+  notes: string | null;
+}
+
+export interface MaintenanceLog {
+  id: string;
+  vehicleId: string;
+  date: string;
+  type: string;
+  description: string | null;
+  cost: number | null;
+  provider: string | null;
+  mileageAtService: number | null;
+  nextServiceDue: string | null;
+  status: string;
+  notes: string | null;
+}
+
+export interface Asset {
+  id: string;
+  funeralHomeId: string;
+  name: string;
+  category: string;
+  serialNumber: string | null;
+  barcodeQrCode: string | null;
+  purchaseDate: string | null;
+  purchasePrice: number | null;
+  supplier: string | null;
+  warrantyExpiry: string | null;
+  currentLocation: string | null;
+  branchId: string | null;
+  branch?: { id: string; name: string } | null;
+  condition: string;
+  status: string;
+  assignedEmployee: string | null;
+  notes: string | null;
+  photos: AssetPhoto[];
+  documents: AssetDocument[];
+  movementHistories: AssetMovementHistory[];
+  damageReports: AssetDamageReport[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssetPhoto {
+  id: string;
+  assetId: string;
+  url: string;
+  caption: string | null;
+}
+
+export interface AssetDocument {
+  id: string;
+  assetId: string;
+  name: string;
+  url: string;
+  type: string | null;
+}
+
+export interface AssetMovementHistory {
+  id: string;
+  assetId: string;
+  fromBranch: string | null;
+  toBranch: string | null;
+  fromLocation: string | null;
+  toLocation: string | null;
+  movedBy: string | null;
+  notes: string | null;
+  movedAt: string;
+}
+
+export interface AssetDamageReport {
+  id: string;
+  assetId: string;
+  reportedBy: string | null;
+  date: string;
+  description: string;
+  severity: string;
+  status: string;
+  cost: number | null;
+  notes: string | null;
+}
+
+export interface FuneralResourceReservation {
+  id: string;
+  funeralHomeId: string;
+  memorialId: string;
+  memorial?: { id: string; deceasedName: string; slug: string };
+  vehicleId: string | null;
+  vehicle?: { id: string; name: string; registrationNumber: string } | null;
+  assetId: string | null;
+  asset?: { id: string; name: string; category: string } | null;
+  quantity: number;
+  reservedAt: string;
+  reservedBy: string | null;
+  checkedInAt: string | null;
+  checkedOutAt: string | null;
+  returnedAt: string | null;
+  status: string;
+  notes: string | null;
+}
+
+// ── Feature Management Types ───────────────────────────────────────────────
+
+export const RELEASE_CHANNELS = [
+  'INTERNAL', 'QA', 'BETA', 'EARLY_ACCESS', 'GENERAL_AVAILABILITY', 'DEPRECATED', 'DISABLED',
+] as const;
+
+export const FEATURE_CATEGORIES = [
+  'MEMORIALS', 'OPERATIONS', 'VEHICLES', 'ASSETS', 'CASE_MANAGEMENT', 'MARKETING',
+  'CRM', 'INSURANCE', 'MEMBERSHIP', 'REPORTS', 'STAFF', 'PAYMENTS', 'API', 'WHITE_LABEL', 'GENERAL',
+] as const;
+
+export const EDITIONS = [
+  { key: 'MEMORIAL', name: 'MemoryConnect Memorial', rank: 0 },
+  { key: 'FUNERAL_OFFICE', name: 'MemoryConnect Funeral Office', rank: 1 },
+  { key: 'ENTERPRISE', name: 'MemoryConnect Enterprise', rank: 2 },
+  { key: 'WHITE_LABEL', name: 'MemoryConnect White Label', rank: 3 },
+] as const;
+
+export const PLANS = [
+  { key: 'STARTER', name: 'Starter', rank: 0 },
+  { key: 'PROFESSIONAL', name: 'Professional', rank: 1 },
+  { key: 'BUSINESS', name: 'Business', rank: 2 },
+  { key: 'ENTERPRISE', name: 'Enterprise', rank: 3 },
+] as const;
+
+export const ROLLOUT_PERCENTS = [0, 5, 10, 25, 50, 75, 100] as const;
+
+export const FEATURE_VISIBILITY_MODES = ['HIDDEN', 'COMING_SOON', 'ENABLED'] as const;
+
+export const createFeatureSchema = z.object({
+  key: z.string().min(1).max(100).regex(/^[A-Z0-9_]+$/, 'Key must be uppercase letters, numbers, or underscores'),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional().nullable(),
+  category: z.enum(FEATURE_CATEGORIES).optional(),
+  releaseChannel: z.enum(RELEASE_CHANNELS).optional(),
+  enabledGlobally: z.boolean().optional(),
+  premium: z.boolean().optional(),
+  minimumEdition: z.string().optional().nullable(),
+  minimumPlan: z.string().optional().nullable(),
+  rolloutPercent: z.number().int().min(0).max(100).optional(),
+});
+
+export const updateFeatureSchema = createFeatureSchema.partial().omit({ key: true });
+
+export type CreateFeatureInput = z.infer<typeof createFeatureSchema>;
+export type UpdateFeatureInput = z.infer<typeof updateFeatureSchema>;
+
+export const funeralHomeFeatureSchema = z.object({
+  enabled: z.boolean(),
+  releaseChannelOverride: z.enum(RELEASE_CHANNELS).optional().nullable(),
+});
+
+export type FuneralHomeFeatureInput = z.infer<typeof funeralHomeFeatureSchema>;
+
+export const userFeatureSchema = z.object({
+  enabled: z.boolean(),
+  expiresAt: z.string().optional().nullable(),
+});
+
+export type UserFeatureInput = z.infer<typeof userFeatureSchema>;
+
+export const createFeatureDependencySchema = z.object({
+  featureKey: z.string().min(1).max(100),
+  dependsOnFeature: z.string().min(1).max(100),
+});
+
+export type CreateFeatureDependencyInput = z.infer<typeof createFeatureDependencySchema>;
+
+export interface FeatureDependency {
+  id: string;
+  featureKey: string;
+  dependsOnFeature: string;
+  createdAt: string;
+}
+
+export interface Feature {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  category: string;
+  releaseChannel: string;
+  enabledGlobally: boolean;
+  premium: boolean;
+  minimumEdition: string | null;
+  minimumPlan: string | null;
+  rolloutPercent: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FeatureWithOverrides extends Feature {
+  funeralHomeOverrides: { id: string; funeralHomeId: string; enabled: boolean; releaseChannelOverride: string | null }[];
+  userOverrides: { id: string; userId: string; enabled: boolean; expiresAt: string | null }[];
+  dependencies: string[];
+  requiredBy: string[];
+}
+
+export interface FuneralHomeFeature {
+  id: string;
+  funeralHomeId: string;
+  featureKey: string;
+  enabled: boolean;
+  releaseChannelOverride: string | null;
+  enabledBy: string | null;
+  enabledAt: string;
+  feature?: Feature;
+}
+
+export interface UserFeature {
+  id: string;
+  userId: string;
+  featureKey: string;
+  enabled: boolean;
+  expiresAt: string | null;
+  enabledBy: string | null;
+  feature?: Feature;
+}
+
+export interface FeatureAuditLogEntry {
+  id: string;
+  actorUserId: string | null;
+  actorName: string | null;
+  action: string;
+  featureKey: string;
+  targetType: string;
+  targetId: string | null;
+  funeralHomeId: string | null;
+  details: string | null;
+  createdAt: string;
+}
+
+export interface ResolvedFeature {
+  key: string;
+  name: string;
+  enabled: boolean;
+  visibility: 'HIDDEN' | 'COMING_SOON' | 'ENABLED';
+  reason: string;
+}

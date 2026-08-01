@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Router } from 'express';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma';
 import { prisma } from '../lib/prisma';
 import { formatMemorial } from '../lib/utils';
 import { tributeSchema } from '@memorialconnect/shared';
@@ -8,7 +8,7 @@ import { brandFromFuneralHome } from '@memorialconnect/shared';
 import { isZodError } from '../lib/validation';
 import { env } from '../lib/env';
 import { isPubliclyViewable, MEMORIAL_STATUS } from '../lib/publishing';
-import { verifyPreviewToken } from '../middleware/auth';
+import { verifyPreviewToken, verifyQAToken } from '../middleware/auth';
 import { z } from 'zod';
 import { DEMO_SLUG, demoMemorialSnapshot, demoProgramme } from '../lib/demoMemorial';
 
@@ -46,7 +46,7 @@ const publicMemorialInclude = {
   locations: { orderBy: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] },
   funeralHome: {
     select: {
-      name: true, tradingName: true, phone: true, email: true, address: true, logoUrl: true, iconUrl: true,
+      name: true, slug: true, tradingName: true, phone: true, email: true, address: true, logoUrl: true, iconUrl: true,
       primaryColor: true, secondaryColor: true, accentColor: true, backgroundColor: true, textColor: true,
       fontFamily: true, buttonStyle: true, cardStyle: true, borderRadius: true, whatsapp: true,
       websiteUrl: true, facebookUrl: true, instagramUrl: true, tiktokUrl: true, footerText: true,
@@ -246,6 +246,23 @@ router.post('/memorials/:slug/tributes', async (req, res) => {
   } catch (error) {
     if (isZodError(error)) return res.status(400).json({ success: false, message: error.errors[0].message });
     res.status(500).json({ success: false, message: 'Failed to submit tribute' });
+  }
+});
+
+router.post('/verify-qa', async (req, res) => {
+  try {
+    const token = req.body?.token;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ success: false, message: 'Token required' });
+    }
+    const payload = verifyQAToken(token);
+    if (!payload) {
+      return res.status(403).json({ success: false, message: 'Invalid or expired QA token' });
+    }
+    res.json({ success: true, data: payload });
+  } catch (error) {
+    console.error('Verify QA token error:', error);
+    res.status(500).json({ success: false, message: 'Failed to verify QA token' });
   }
 });
 

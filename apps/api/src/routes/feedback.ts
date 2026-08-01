@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma';
 import { prisma } from '../lib/prisma';
 import { funeralFeedbackSchema } from '@memorialconnect/shared';
 import { isZodError } from '../lib/validation';
 import { isPubliclyViewable } from '../lib/publishing';
-import { authenticate, requireRole, requireFuneralHomeAccess, ROLES } from '../middleware/auth';
+import { authenticate, requireRole, ROLES } from '../middleware/auth';
+import { requireFeature } from '../lib/featureService';
 import { sendContactRequestNotification } from '../lib/email';
 import { z } from 'zod';
 
@@ -87,7 +88,7 @@ router.post('/public/memorials/:slug/feedback', async (req, res) => {
 router.get(
   '/admin/memorials/:id/feedback',
   authenticate,
-  requireFuneralHomeAccess((req) => typeof req.params.id === 'string' ? req.params.id : undefined),
+  requireFeature('FEEDBACK'),
   async (req, res) => {
     try {
       const memorialId = typeof req.params.id === 'string' ? req.params.id : '';
@@ -122,7 +123,7 @@ router.get(
 router.get(
   '/admin/memorials/:id/feedback/summary',
   authenticate,
-  requireFuneralHomeAccess((req) => typeof req.params.id === 'string' ? req.params.id : undefined),
+  requireFeature('FEEDBACK'),
   async (req, res) => {
     try {
       const memorialId = typeof req.params.id === 'string' ? req.params.id : '';
@@ -209,6 +210,7 @@ const contactStatusSchema = z.object({
 router.patch(
   '/admin/memorials/:id/feedback/:feedbackId/status',
   authenticate,
+  requireFeature('FEEDBACK'),
   requireRole([ROLES.SUPER_ADMIN, ROLES.FUNERAL_HOME_ADMIN]),
   async (req, res) => {
     try {
@@ -250,6 +252,7 @@ router.patch(
 router.get(
   '/admin/contact-enquiries',
   authenticate,
+  requireFeature('FEEDBACK'),
   requireRole([ROLES.SUPER_ADMIN, ROLES.FUNERAL_HOME_ADMIN]),
   async (req, res) => {
     try {

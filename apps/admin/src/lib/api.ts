@@ -15,6 +15,16 @@ import type {
   FuneralFeedback,
   FuneralFeedbackSummary,
   FuneralContactEnquiry,
+  Feature,
+  FeatureWithOverrides,
+  ResolvedFeature,
+  FeatureAuditLogEntry,
+  FeatureDependency,
+  FuneralHomeFeatureInput,
+  UserFeatureInput,
+  EntitlementSnapshot,
+  PlatformCommercialSettings,
+  MemorialCreditPurchase,
 } from '@memorialconnect/shared';
 
 const API_URL = getApiUrl();
@@ -113,7 +123,7 @@ export const api = {
 
   getMemorials: () => request<Memorial[]>('/api/v1/memorials'),
 
-  createMemorial: (data: { deceasedName: string; serviceDate?: string; serviceVenue?: string }) =>
+  createMemorial: (data: { deceasedName: string; serviceDate?: string; serviceVenue?: string; timezone?: string }) =>
     request<Memorial>('/api/v1/memorials', { method: 'POST', body: JSON.stringify(data) }),
 
   getMemorial: (id: string) => request<MemorialDetail>(`/api/v1/memorials/${id}`),
@@ -125,7 +135,7 @@ export const api = {
     request<Memorial>(`/api/v1/memorials/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   initializePublishPayment: (id: string) =>
-    request<{ authorizationUrl: string; accessCode: string; reference: string }>(`/api/v1/memorials/${id}/initialize-publish-payment`, { method: 'POST' }),
+    request<{ free?: boolean; mode?: 'TRIAL' | 'CREDITS'; memorial?: MemorialDetail; authorizationUrl?: string; accessCode?: string; reference?: string }>(`/api/v1/memorials/${id}/initialize-publish-payment`, { method: 'POST' }),
 
   verifyPublishPayment: (id: string, reference: string) =>
     request<Memorial>(`/api/v1/memorials/${id}/verify-publish-payment/${encodeURIComponent(reference)}`),
@@ -259,6 +269,17 @@ export const api = {
 
   getPayments: () => request<Array<PublishPayment & { memorial: { deceasedName: string } }>>('/api/v1/payments'),
 
+  getEntitlementStatus: () => request<EntitlementSnapshot>('/api/v1/entitlement/status'),
+
+  purchaseCredits: (bundleCredits: number) =>
+    request<{ authorizationUrl: string; accessCode: string; reference: string; credits: number }>('/api/v1/entitlement/credits/purchase', {
+      method: 'POST',
+      body: JSON.stringify({ bundleCredits }),
+    }),
+
+  verifyCreditPurchase: (reference: string) =>
+    request<EntitlementSnapshot>(`/api/v1/entitlement/credits/verify/${encodeURIComponent(reference)}`),
+
   getPlatformSummary: () => request<PlatformSummary>('/api/v1/platform/summary'),
   getPlatformFuneralHomes: () => request<PlatformFuneralHome[]>('/api/v1/platform/funeral-homes'),
   getPlatformFuneralHome: (id: string) => request<PlatformFuneralHomeDetail>(`/api/v1/platform/funeral-homes/${id}`),
@@ -278,6 +299,17 @@ export const api = {
   deletePlatformMemorial: (id: string) =>
     request<null>(`/api/v1/platform/memorials/${id}`, { method: 'DELETE', body: JSON.stringify({ confirmed: true }) }),
 
+  getPlatformCommercialSettings: () => request<PlatformCommercialSettings>('/api/v1/platform/commercial-settings'),
+
+  updatePlatformCommercialSettings: (data: Partial<PlatformCommercialSettings>) =>
+    request<PlatformCommercialSettings>('/api/v1/platform/commercial-settings', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  getPlatformCreditPurchases: () =>
+    request<Array<MemorialCreditPurchase & { funeralHome: { id: string; name: string } }>>('/api/v1/platform/credit-purchases'),
+
+  verifyPlatformCreditPurchase: (id: string) =>
+    request<MemorialCreditPurchase>(`/api/v1/platform/credit-purchases/${id}/verify`, { method: 'POST', body: JSON.stringify({ confirmed: true }) }),
+
   // ── Funeral Feedback ─────────────────────────────────────────────────────
 
   getMemorialFeedback: (id: string) =>
@@ -294,6 +326,281 @@ export const api = {
 
   getContactEnquiries: () =>
     request<{ enquiries: FuneralContactEnquiry[]; summary: { NEW: number; CONTACTED: number; CLOSED: number; total: number; thisMonth: number } }>('/api/v1/admin/contact-enquiries'),
+
+  getMemorialPublicUrl: (id: string) =>
+    request<{ slug: string; publicUrl: string; qrCodeUrl: string }>(`/api/v1/admin/memorials/${id}/public-url`),
+
+  // ── Marketing Hub ─────────────────────────────────────────────────────────
+
+  getMarketingDashboard: () =>
+    request<MarketingDashboard>('/api/v1/marketing/dashboard'),
+
+  getMarketingContact: () =>
+    request<MarketingContact | null>('/api/v1/marketing/contact'),
+
+  updateMarketingContact: (data: Partial<MarketingContact>) =>
+    request<MarketingContact>('/api/v1/marketing/contact', { method: 'PUT', body: JSON.stringify(data) }),
+
+  uploadMarketingContactLogo: async (file: File) => {
+    const token = getToken();
+    const form = new FormData();
+    form.append('logo', file);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/marketing/contact/logo`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || 'Logo upload failed');
+      return json.data as { logoUrl: string };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') throw new Error('Logo upload timed out');
+        throw error;
+      }
+      throw new Error('Logo upload failed');
+    }
+  },
+
+  uploadMarketingContactCover: async (file: File) => {
+    const token = getToken();
+    const form = new FormData();
+    form.append('cover', file);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/marketing/contact/cover`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || 'Cover upload failed');
+      return json.data as { coverImageUrl: string };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') throw new Error('Cover upload timed out');
+        throw error;
+      }
+      throw new Error('Cover upload failed');
+    }
+  },
+
+  getBrochureCategories: () =>
+    request<BrochureCategory[]>('/api/v1/marketing/categories'),
+
+  createBrochureCategory: (data: { name: string }) =>
+    request<BrochureCategory>('/api/v1/marketing/categories', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateBrochureCategory: (id: string, data: { name: string }) =>
+    request<BrochureCategory>(`/api/v1/marketing/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteBrochureCategory: (id: string) =>
+    request<void>(`/api/v1/marketing/categories/${id}`, { method: 'DELETE' }),
+
+  getBrochures: () =>
+    request<Brochure[]>('/api/v1/marketing/brochures'),
+
+  createBrochure: (data: Partial<Brochure>) =>
+    request<Brochure>('/api/v1/marketing/brochures', { method: 'POST', body: JSON.stringify(data) }),
+
+  getBrochure: (id: string) =>
+    request<Brochure>(`/api/v1/marketing/brochures/${id}`),
+
+  updateBrochure: (id: string, data: Partial<Brochure>) =>
+    request<Brochure>(`/api/v1/marketing/brochures/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteBrochure: (id: string) =>
+    request<void>(`/api/v1/marketing/brochures/${id}`, { method: 'DELETE' }),
+
+  duplicateBrochure: (id: string) =>
+    request<Brochure>(`/api/v1/marketing/brochures/${id}/duplicate`, { method: 'POST' }),
+
+  uploadBrochureCover: async (id: string, file: File) => {
+    const token = getToken();
+    const form = new FormData();
+    form.append('cover', file);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/marketing/brochures/${id}/cover`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || 'Cover upload failed');
+      return json.data as { coverImageUrl: string };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') throw new Error('Cover upload timed out');
+        throw error;
+      }
+      throw new Error('Cover upload failed');
+    }
+  },
+
+  uploadBrochureGallery: async (id: string, files: FileList) => {
+    const token = getToken();
+    const form = new FormData();
+    Array.from(files).forEach((file) => form.append('gallery', file));
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/marketing/brochures/${id}/gallery`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || 'Gallery upload failed');
+      return json.data as BrochureGalleryItem[];
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') throw new Error('Gallery upload timed out');
+        throw error;
+      }
+      throw new Error('Gallery upload failed');
+    }
+  },
+
+  deleteBrochureGalleryItem: (id: string, galleryId: string) =>
+    request<void>(`/api/v1/marketing/brochures/${id}/gallery/${galleryId}`, { method: 'DELETE' }),
+
+  uploadBrochurePdf: async (id: string, file: File) => {
+    const token = getToken();
+    const form = new FormData();
+    form.append('pdf', file);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/marketing/brochures/${id}/pdf`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || 'PDF upload failed');
+      return json.data as { pdfUrl: string };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') throw new Error('PDF upload timed out');
+        throw error;
+      }
+      throw new Error('PDF upload failed');
+    }
+  },
+
+  getBrochureQrCode: (id: string) =>
+    request<{ qrCodeUrl: string; publicUrl: string }>(`/api/v1/marketing/brochures/${id}/qr-code`),
+
+  reorderBrochures: (order: Array<{ id: string; displayOrder: number }>) =>
+    request<void>('/api/v1/marketing/brochures/reorder', { method: 'PATCH', body: JSON.stringify(order) }),
+
+  getPromotions: () =>
+    request<Promotion[]>('/api/v1/marketing/promotions'),
+
+  createPromotion: (data: Partial<Promotion>) =>
+    request<Promotion>('/api/v1/marketing/promotions', { method: 'POST', body: JSON.stringify(data) }),
+
+  getPromotion: (id: string) =>
+    request<Promotion>(`/api/v1/marketing/promotions/${id}`),
+
+  updatePromotion: (id: string, data: Partial<Promotion>) =>
+    request<Promotion>(`/api/v1/marketing/promotions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deletePromotion: (id: string) =>
+    request<void>(`/api/v1/marketing/promotions/${id}`, { method: 'DELETE' }),
+
+  uploadPromotionBanner: async (id: string, file: File) => {
+    const token = getToken();
+    const form = new FormData();
+    form.append('banner', file);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/marketing/promotions/${id}/banner`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || 'Banner upload failed');
+      return json.data as { bannerImageUrl: string };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') throw new Error('Banner upload timed out');
+        throw error;
+      }
+      throw new Error('Banner upload failed');
+    }
+  },
+
+  getMarketingBranches: () =>
+    request<MarketingBranch[]>('/api/v1/marketing/branches'),
+
+  createMarketingBranch: (data: Partial<MarketingBranch>) =>
+    request<MarketingBranch>('/api/v1/marketing/branches', { method: 'POST', body: JSON.stringify(data) }),
+
+  getMarketingBranch: (id: string) =>
+    request<MarketingBranch>(`/api/v1/marketing/branches/${id}`),
+
+  updateMarketingBranch: (id: string, data: Partial<MarketingBranch>) =>
+    request<MarketingBranch>(`/api/v1/marketing/branches/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteMarketingBranch: (id: string) =>
+    request<void>(`/api/v1/marketing/branches/${id}`, { method: 'DELETE' }),
+
+  getMarketingEnquiries: () =>
+    request<Enquiry[]>('/api/v1/marketing/enquiries'),
+
+  getMarketingEnquiry: (id: string) =>
+    request<Enquiry>(`/api/v1/marketing/enquiries/${id}`),
+
+  deleteMarketingEnquiry: (id: string) =>
+    request<void>(`/api/v1/marketing/enquiries/${id}`, { method: 'DELETE' }),
+
+  getMarketingAnalytics: (days: number = 30) =>
+    request<MarketingAnalytics>(`/api/v1/marketing/analytics?days=${days}`),
 };
 
 interface MemorialDetail extends Memorial {
@@ -406,8 +713,9 @@ export interface FuneralHomeProfile {
 
 export interface PlatformSummary {
   registrations: { total: number; today: number; month: number; pending: number; active: number; inactive: number };
+  trials: { active: number; expired: number };
   users: { total: number; withoutPassword: number };
-  payments: { totalRevenueCents: number; todayRevenueCents: number; monthRevenueCents: number; successful: number; failed: number; pending: number };
+  payments: { totalRevenueCents: number; todayRevenueCents: number; monthRevenueCents: number; successful: number; failed: number; pending: number; creditPurchases: number; creditPurchaseRevenueCents: number };
   memorials: { total: number; draft: number; published: number; locked: number; expired: number; deleted: number; publishedThisMonth: number };
   totalPublicViews: number;
 }
@@ -423,6 +731,11 @@ export interface PlatformFuneralHome {
   paymentsTotalCents: number;
   lastActivityAt: string;
   status: string;
+  trialStartsAt?: string | null;
+  trialEndsAt?: string | null;
+  trialMemorialsUsed?: number;
+  memorialCreditsPurchased?: number;
+  memorialCreditsRemaining?: number;
 }
 
 export interface PlatformPayment {
@@ -480,11 +793,388 @@ export interface PlatformFuneralHomeDetail extends FuneralHomeProfile {
   status: string;
   suspendedAt?: string | null;
   createdAt: string;
+  trialStartsAt?: string | null;
+  trialEndsAt?: string | null;
+  trialMemorialsUsed?: number;
+  memorialCreditsPurchased?: number;
+  memorialCreditsRemaining?: number;
+  lastCreditPurchaseAt?: string | null;
   users: PlatformUser[];
   memorials: Array<Memorial & { deletedAt?: string | null; editLocksAt?: string | null; publicExpiresAt?: string | null }>;
   payments: PlatformPayment[];
+  creditPurchases: MemorialCreditPurchase[];
   familyInvitations: Array<FamilyInvitation & { memorial: { deceasedName: string } }>;
   platformAuditLogs: PlatformAuditLog[];
+}
+
+export interface MarketingDashboard {
+  totalBrochures: number;
+  publishedBrochures: number;
+  totalPromotions: number;
+  activePromotions: number;
+  totalEnquiries: number;
+  totalBranches: number;
+  totalViews: number;
+  contactConfigured: boolean;
+  recentEnquiries: Array<{
+    id: string;
+    fullName: string;
+    phoneNumber?: string | null;
+    emailAddress?: string | null;
+    message?: string | null;
+    brochure?: { title: string; slug: string };
+    createdAt: string;
+  }>;
+}
+
+export interface MarketingContact {
+  id?: string;
+  funeralHomeId?: string;
+  businessName?: string | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  description?: string | null;
+  address?: string | null;
+  telephone?: string | null;
+  mobile?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  website?: string | null;
+  businessHours?: string | null;
+  googleMapsUrl?: string | null;
+  facebook?: string | null;
+  instagram?: string | null;
+  tiktok?: string | null;
+  linkedin?: string | null;
+  enableBrochures?: boolean;
+  enableContact?: boolean;
+  enableBranches?: boolean;
+  enablePromotions?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BrochureCategory {
+  id: string;
+  funeralHomeId?: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  displayOrder?: number;
+  isDefault?: boolean;
+  _count?: { brochures: number };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BrochureGalleryItem {
+  id: string;
+  brochureId?: string;
+  url: string;
+  caption?: string | null;
+  displayOrder: number;
+}
+
+export interface Brochure {
+  id: string;
+  funeralHomeId?: string;
+  categoryId?: string | null;
+  category?: BrochureCategory | null;
+  title: string;
+  slug?: string;
+  coverImageUrl?: string | null;
+  description?: string | null;
+  pdfUrl?: string | null;
+  ctaEnabled?: boolean;
+  ctaText?: string | null;
+  ctaUrl?: string | null;
+  whatsappNumber?: string | null;
+  phoneNumber?: string | null;
+  emailAddress?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  published?: boolean;
+  featured?: boolean;
+  displayOrder?: number;
+  viewCount?: number;
+  shortUrl?: string | null;
+  gallery?: BrochureGalleryItem[];
+  _count?: { enquiries: number };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Promotion {
+  id: string;
+  funeralHomeId?: string;
+  title: string;
+  description?: string | null;
+  bannerImageUrl?: string | null;
+  startDate: string;
+  endDate: string;
+  buttonText?: string | null;
+  buttonUrl?: string | null;
+  published?: boolean;
+  active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MarketingBranch {
+  id: string;
+  funeralHomeId?: string;
+  name: string;
+  manager?: string | null;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  country?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  businessHours?: string | null;
+  googleMapsUrl?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Enquiry {
+  id: string;
+  brochureId: string;
+  funeralHomeId?: string;
+  fullName: string;
+  phoneNumber?: string | null;
+  emailAddress?: string | null;
+  message?: string | null;
+  brochure?: { title: string; slug: string };
+  createdAt: string;
+}
+
+export interface MarketingAnalytics {
+  totalViews: number;
+  totalUniqueVisitors: number;
+  totalQrScans: number;
+  totalPdfDownloads: number;
+  totalPhoneClicks: number;
+  totalWhatsappClicks: number;
+  totalCtaClicks: number;
+  totalEnquiries: number;
+  conversionRate: number;
+  viewsByDay: Array<{ date: string; count: number }>;
+  brochureViews: Array<{ id: string; title: string; slug: string; viewCount: number }>;
+}
+
+// ── Vehicle APIs ────────────────────────────────────────────────────────────
+
+export interface VehiclePhoto {
+  id: string; url: string; caption: string | null;
+}
+
+export interface ServiceHistory {
+  id: string; serviceDate: string; description: string | null; mileageAtService: number | null;
+  cost: number | null; provider: string | null; nextServiceDate: string | null; notes: string | null;
+}
+
+export interface FuelLog {
+  id: string; date: string; amount: number; cost: number; mileage: number | null;
+  fuelType: string | null; station: string | null; receiptUrl: string | null; notes: string | null;
+}
+
+export interface MaintenanceLog {
+  id: string; date: string; type: string; description: string | null; cost: number | null;
+  provider: string | null; mileageAtService: number | null; nextServiceDue: string | null;
+  status: string; notes: string | null;
+}
+
+export interface Vehicle {
+  id: string; name: string; registrationNumber: string; vehicleType: string;
+  manufacturer: string | null; model: string | null; year: number | null; vin: string | null;
+  colour: string | null; capacity: number | null; currentMileage: number | null;
+  fuelType: string | null; transmission: string | null; status: string;
+  assignedDriver: string | null; insuranceCompany: string | null; insuranceNumber: string | null;
+  insuranceExpiry: string | null; roadworthyExpiry: string | null; licenseDiskExpiry: string | null;
+  nextServiceDate: string | null; notes: string | null;
+  photos: VehiclePhoto[]; serviceHistories: ServiceHistory[];
+  fuelLogs: FuelLog[]; maintenanceLogs: MaintenanceLog[];
+  createdAt: string; updatedAt: string;
+}
+
+export interface VehicleDashboard {
+  total: number; available: number; booked: number; maintenance: number;
+  inactive: number; licenseExpiringSoon: number;
+}
+
+export const vehicleApi = {
+  list: (status?: string) => request<Vehicle[]>(`/api/v1/vehicles${status ? `?status=${status}` : ''}`),
+  dashboard: () => request<VehicleDashboard>('/api/v1/vehicles/dashboard'),
+  get: (id: string) => request<Vehicle>(`/api/v1/vehicles/${id}`),
+  create: (data: Record<string, unknown>) => request<Vehicle>('/api/v1/vehicles', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Record<string, unknown>) => request<Vehicle>(`/api/v1/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) => request<null>(`/api/v1/vehicles/${id}`, { method: 'DELETE' }),
+  uploadPhoto: async (vehicleId: string, file: File) => {
+    const form = new FormData(); form.append('photo', file);
+    return apiUpload<Vehicle>(`/api/v1/vehicles/${vehicleId}/photos`, form);
+  },
+  deletePhoto: (vehicleId: string, photoId: string) => request<null>(`/api/v1/vehicles/${vehicleId}/photos/${photoId}`, { method: 'DELETE' }),
+  addServiceHistory: (vehicleId: string, data: Record<string, unknown>) =>
+    request<ServiceHistory>(`/api/v1/vehicles/${vehicleId}/service-history`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteServiceHistory: (vehicleId: string, historyId: string) =>
+    request<null>(`/api/v1/vehicles/${vehicleId}/service-history/${historyId}`, { method: 'DELETE' }),
+  addFuelLog: (vehicleId: string, data: Record<string, unknown>) =>
+    request<FuelLog>(`/api/v1/vehicles/${vehicleId}/fuel-log`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteFuelLog: (vehicleId: string, logId: string) =>
+    request<null>(`/api/v1/vehicles/${vehicleId}/fuel-log/${logId}`, { method: 'DELETE' }),
+  addMaintenanceLog: (vehicleId: string, data: Record<string, unknown>) =>
+    request<MaintenanceLog>(`/api/v1/vehicles/${vehicleId}/maintenance-log`, { method: 'POST', body: JSON.stringify(data) }),
+  updateMaintenanceLog: (vehicleId: string, logId: string, data: Record<string, unknown>) =>
+    request<MaintenanceLog>(`/api/v1/vehicles/${vehicleId}/maintenance-log/${logId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteMaintenanceLog: (vehicleId: string, logId: string) =>
+    request<null>(`/api/v1/vehicles/${vehicleId}/maintenance-log/${logId}`, { method: 'DELETE' }),
+};
+
+// ── Asset APIs ─────────────────────────────────────────────────────────────
+
+export interface AssetPhoto {
+  id: string; url: string; caption: string | null;
+}
+
+export interface AssetDocument {
+  id: string; name: string; url: string; type: string | null;
+}
+
+export interface AssetMovement {
+  id: string; fromBranch: string | null; toBranch: string | null;
+  fromLocation: string | null; toLocation: string | null; movedBy: string | null;
+  notes: string | null; movedAt: string;
+}
+
+export interface AssetDamageReport {
+  id: string; reportedBy: string | null; date: string; description: string;
+  severity: string; status: string; cost: number | null; notes: string | null;
+}
+
+export interface Asset {
+  id: string; name: string; category: string; serialNumber: string | null;
+  barcodeQrCode: string | null; purchaseDate: string | null; purchasePrice: number | null;
+  supplier: string | null; warrantyExpiry: string | null; currentLocation: string | null;
+  branchId: string | null; branch: { id: string; name: string } | null;
+  condition: string; status: string; assignedEmployee: string | null; notes: string | null;
+  photos: AssetPhoto[]; documents: AssetDocument[];
+  movementHistories: AssetMovement[]; damageReports: AssetDamageReport[];
+  createdAt: string; updatedAt: string;
+}
+
+export interface AssetDashboard {
+  total: number; byCategory: Record<string, number>; byStatus: Record<string, number>;
+  warrantyExpiringSoon: number;
+}
+
+export const assetApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<Asset[]>(`/api/v1/assets${qs}`);
+  },
+  dashboard: () => request<AssetDashboard>('/api/v1/assets/dashboard'),
+  get: (id: string) => request<Asset>(`/api/v1/assets/${id}`),
+  create: (data: Record<string, unknown>) => request<Asset>('/api/v1/assets', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Record<string, unknown>) => request<Asset>(`/api/v1/assets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) => request<null>(`/api/v1/assets/${id}`, { method: 'DELETE' }),
+  uploadPhoto: async (assetId: string, file: File) => {
+    const form = new FormData(); form.append('photo', file);
+    return apiUpload<Asset>(`/api/v1/assets/${assetId}/photos`, form);
+  },
+  deletePhoto: (assetId: string, photoId: string) => request<null>(`/api/v1/assets/${assetId}/photos/${photoId}`, { method: 'DELETE' }),
+  addMovement: (assetId: string, data: Record<string, unknown>) =>
+    request<AssetMovement>(`/api/v1/assets/${assetId}/movements`, { method: 'POST', body: JSON.stringify(data) }),
+  addDamageReport: (assetId: string, data: Record<string, unknown>) =>
+    request<AssetDamageReport>(`/api/v1/assets/${assetId}/damage-reports`, { method: 'POST', body: JSON.stringify(data) }),
+  updateDamageReport: (assetId: string, reportId: string, data: Record<string, unknown>) =>
+    request<AssetDamageReport>(`/api/v1/assets/${assetId}/damage-reports/${reportId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getQrCode: (assetId: string) => request<{ qrCode: string; assetId: string }>(`/api/v1/assets/${assetId}/qr-code`),
+};
+
+// ── Funeral Resource Reservation APIs ─────────────────────────────────────
+
+export interface FuneralResourceReservation {
+  id: string; memorialId: string; vehicleId: string | null; assetId: string | null;
+  quantity: number; reservedAt: string; reservedBy: string | null;
+  checkedInAt: string | null; checkedOutAt: string | null; returnedAt: string | null;
+  status: string; notes: string | null;
+  memorial: { id: string; deceasedName: string; slug: string; status: string; serviceDate: string };
+  vehicle: { id: string; name: string; registrationNumber: string } | null;
+  asset: { id: string; name: string; category: string } | null;
+}
+
+export const funeralResourceApi = {
+  list: (memorialId?: string) =>
+    request<FuneralResourceReservation[]>(`/api/v1/funeral-resources${memorialId ? `?memorialId=${memorialId}` : ''}`),
+  getForMemorial: (memorialId: string) =>
+    request<FuneralResourceReservation[]>(`/api/v1/funeral-resources/memorial/${memorialId}`),
+  create: (data: Record<string, unknown>) =>
+    request<FuneralResourceReservation>('/api/v1/funeral-resources', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Record<string, unknown>) =>
+    request<FuneralResourceReservation>(`/api/v1/funeral-resources/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) => request<null>(`/api/v1/funeral-resources/${id}`, { method: 'DELETE' }),
+  checkAvailability: (params: { vehicleId?: string; assetId?: string; date: string }) => {
+    const qs = '?' + new URLSearchParams(params).toString();
+    return request<{ date: string; available: boolean }>(`/api/v1/funeral-resources/availability${qs}`);
+  },
+};
+
+export const featureApi = {
+  getFeatures: () => request<{ features: FeatureWithOverrides[]; auditCount: number }>('/api/v1/platform/features'),
+  getAll: () => request<Feature[]>('/api/v1/platform/features/all'),
+  getAuditLog: (limit = 100) => request<FeatureAuditLogEntry[]>(`/api/v1/platform/features/audit-log?limit=${limit}`),
+  getFuneralHomes: () =>
+    request<Array<{ id: string; name: string; plan: string; edition: string; status: string; featureOverrides: Array<{ id: string; featureKey: string; enabled: boolean; releaseChannelOverride: string | null; enabledAt: string }> }>>('/api/v1/platform/features/funeral-homes'),
+  create: (data: Record<string, unknown>) => request<Feature>('/api/v1/platform/features', { method: 'POST', body: JSON.stringify(data) }),
+  update: (key: string, data: Record<string, unknown>) => request<Feature>(`/api/v1/platform/features/${key}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (key: string) => request<null>(`/api/v1/platform/features/${key}`, { method: 'DELETE' }),
+  seed: () => request<{ created: number; total: number }>('/api/v1/platform/features/seed', { method: 'POST' }),
+  setFuneralHomeOverride: (homeId: string, key: string, data: FuneralHomeFeatureInput) =>
+    request<unknown>(`/api/v1/platform/features/funeral-homes/${homeId}/features/${key}`, { method: 'PUT', body: JSON.stringify(data) }),
+  removeFuneralHomeOverride: (homeId: string, key: string) =>
+    request<null>(`/api/v1/platform/features/funeral-homes/${homeId}/features/${key}`, { method: 'DELETE' }),
+  setUserOverride: (userId: string, key: string, data: UserFeatureInput) =>
+    request<unknown>(`/api/v1/platform/features/users/${userId}/features/${key}`, { method: 'PUT', body: JSON.stringify(data) }),
+  removeUserOverride: (userId: string, key: string) =>
+    request<null>(`/api/v1/platform/features/users/${userId}/features/${key}`, { method: 'DELETE' }),
+  resolveForHome: (homeId: string) =>
+    request<{ funeralHome: { id: string; plan: string; edition: string; name: string; tradingName: string | null }; features: ResolvedFeature[] }>(`/api/v1/platform/features/resolve/${homeId}`),
+  resolveAll: () =>
+    request<Array<{ funeralHomeId: string; name: string; features: ResolvedFeature[] }>>('/api/v1/platform/features/resolve-all'),
+  getDependencies: () => request<FeatureDependency[]>('/api/v1/platform/features/dependencies'),
+  addDependency: (featureKey: string, dependsOnFeature: string) =>
+    request<FeatureDependency>(`/api/v1/platform/features/dependencies/${featureKey}/depends-on/${dependsOnFeature}`, { method: 'PUT' }),
+  removeDependency: (featureKey: string, dependsOnFeature: string) =>
+    request<null>(`/api/v1/platform/features/dependencies/${featureKey}/depends-on/${dependsOnFeature}`, { method: 'DELETE' }),
+  myFeatures: () => request<{ features: ResolvedFeature[] }>('/api/v1/auth/my-features'),
+};
+
+function apiUpload<T>(url: string, form: FormData): Promise<T> {
+  const token = getToken();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  return (async () => {
+    try {
+      const res = await fetch(`${API_URL}${url}`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || 'Upload failed');
+      return json.data as T;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') throw new Error('Upload timed out');
+      throw error;
+    }
+  })();
 }
 
 export function photoUrl(path: string): string {
@@ -510,4 +1200,10 @@ export type {
   FuneralFeedback,
   FuneralFeedbackSummary,
   FuneralContactEnquiry,
+  Feature,
+  FeatureWithOverrides,
+  ResolvedFeature,
+  FeatureAuditLogEntry,
+  FeatureDependency,
 };
+
