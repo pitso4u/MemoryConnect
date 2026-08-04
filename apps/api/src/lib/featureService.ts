@@ -8,6 +8,7 @@ export const RELEASE_CHANNELS = {
   EARLY_ACCESS: 'EARLY_ACCESS',
   GENERAL_AVAILABILITY: 'GENERAL_AVAILABILITY',
   DEPRECATED: 'DEPRECATED',
+  ARCHIVED: 'ARCHIVED',
   DISABLED: 'DISABLED',
 } as const;
 
@@ -142,6 +143,36 @@ export async function getAllFeatureDefinitions(): Promise<FeatureRow[]> {
 
 export function invalidateFeatureCache() {
   clearCache();
+  featureVersionCounter.value += 1;
+}
+
+/**
+ * Monotonic feature-graph version used for lightweight conditional fetch (ETag).
+ *
+ * The base is the clock-time of the newest feature-graph write (so it is stable
+ * across process restarts and "just works" even if an owner mutates rows via a
+ * path that forgets to invalidate the cache), and the counter layer is bumped
+ * on every `invalidateFeatureCache()` so in-process mutations that do not move
+ * `updatedAt` (e.g. dependency edges) still advance the version.
+ */
+const featureVersionCounter = { value: 0 };
+let featureVersionBase: number | null = null;
+
+export async function getFeatureVersion(): Promise<number> {
+  if (featureVersionBase === null) {
+    const [features, funeralHomeFeatures, userFeatures] = await Promise.all([
+      prisma.feature.findMany({ select: { updatedAt: true } }),
+      prisma.funeralHomeFeature.findMany({ select: { updatedAt: true } }),
+      prisma.userFeature.findMany({ select: { updatedAt: true } }),
+    ]);
+    let max = 0;
+    for (const row of [...features, ...funeralHomeFeatures, ...userFeatures]) {
+      const ms = row.updatedAt.getTime();
+      if (ms > max) max = ms;
+    }
+    featureVersionBase = max;
+  }
+  return featureVersionBase + featureVersionCounter.value;
 }
 
 function getDepsFromCache(key: string): string[] | undefined {
@@ -257,8 +288,8 @@ export async function canAccess(
 
   // 1. RELEASE CHANNEL + ROLE gating
   const channel = feature.releaseChannel;
-  if (channel === RELEASE_CHANNELS.DISABLED) {
-    return { key: feature.key, name: feature.name, enabled: false, visibility: 'HIDDEN', reason: 'Disabled globally' };
+  if (channel === RELEASE_CHANNELS.DISABLED || channel === RELEASE_CHANNELS.ARCHIVED) {
+    return { key: feature.key, name: feature.name, enabled: false, visibility: 'HIDDEN', reason: channel === RELEASE_CHANNELS.ARCHIVED ? 'Archived' : 'Disabled globally' };
   }
   if (channel === RELEASE_CHANNELS.INTERNAL && !isInternal) {
     return { key: feature.key, name: feature.name, enabled: false, visibility: 'HIDDEN', reason: 'Internal only' };
@@ -319,7 +350,8 @@ export async function canAccess(
       granted = { key: feature.key, name: feature.name, enabled: true, visibility: 'ENABLED', reason: 'Super admin access' };
     } else {
       const deprecatedNote = channel === RELEASE_CHANNELS.DEPRECATED ? ' (deprecated)' : '';
-      granted = { key: feature.key, name: feature.name, enabled: true, visibility: 'ENABLED', reason: `General availability${deprecatedNote}` };
+      const archivedNote = channel === RELEASE_CHANNELS.ARCHIVED ? ' (archived)' : '';
+      granted = { key: feature.key, name: feature.name, enabled: true, visibility: 'ENABLED', reason: `General availability${deprecatedNote}${archivedNote}` };
     }
   }
 

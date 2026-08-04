@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, Memorial, FuneralContactEnquiry } from '../lib/api';
-import { Plus, Calendar, MapPin, Phone, Mail, User, MessageSquare, ExternalLink, Copy, QrCode, Check } from 'lucide-react';
+import { api, Memorial, MemorialPerformanceSummary, FuneralContactEnquiry } from '../lib/api';
+import { Plus, Calendar, MapPin, Phone, Mail, User, MessageSquare, ExternalLink, Copy, QrCode, Check, TrendingUp, Eye } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import QRPreviewModal from '../components/memorial/QRPreviewModal';
 
@@ -11,6 +11,71 @@ function isFamilyRole(role?: string) {
 
 function isFuneralHomeAdmin(role?: string) {
   return role === 'SUPER_ADMIN' || role === 'FUNERAL_HOME_ADMIN';
+}
+
+function milestoneFor(views: number): string | null {
+  if (views >= 1000) return '🏆';
+  if (views >= 500) return '⭐⭐⭐';
+  if (views >= 250) return '⭐⭐';
+  if (views >= 100) return '⭐';
+  return null;
+}
+
+function MemorialMilestoneBadge({ memorial }: { memorial: Memorial }) {
+  const badge = memorial.performance?.highestMilestoneAwarded || milestoneFor(memorial.performance?.total72HourViews || 0);
+  if (!badge) return null;
+  return (
+    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800" title="Memorial milestone">
+      {badge}
+    </span>
+  );
+}
+
+function TrendingMemorialsWidget() {
+  const [summary, setSummary] = useState<MemorialPerformanceSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getMemorialPerformanceSummary()
+      .then(setSummary)
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return null;
+  if (!summary || summary.trending.length === 0) return null;
+
+  return (
+    <section className="mb-8 rounded-xl border border-parchment-dark bg-white p-5">
+      <div className="flex items-center gap-2">
+        <TrendingUp size={18} className="text-gold-dark" />
+        <h2 className="font-display text-xl text-ink">Trending Memorials</h2>
+        <span className="rounded-full bg-gold/20 px-2.5 py-0.5 text-xs font-semibold text-gold-dark">72 Hour Watch</span>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {summary.trending.map((memorial) => (
+          <Link
+            key={memorial.id}
+            to={`/memorial/${memorial.id}`}
+            className="flex items-center justify-between gap-3 rounded-lg border border-parchment-dark p-3 transition hover:border-gold/40 hover:bg-parchment/40"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              {memorial.highestMilestoneAwarded && <span className="text-base">{memorial.highestMilestoneAwarded}</span>}
+              <span className="truncate text-sm font-medium text-ink">{memorial.deceasedName}</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-4">
+              <span className="flex items-center gap-1 text-xs text-muted"><Eye size={12} />{memorial.currentDayViews} views</span>
+              <span className="rounded-full bg-parchment px-2 py-0.5 text-xs font-semibold text-ink">Day {memorial.day}</span>
+              <span className={`hidden text-xs font-semibold sm:inline ${
+                summary.averages.day1Views < memorial.currentDayViews ? 'text-emerald-600' : 'text-muted'
+              }`}>{memorial.performanceRating}</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function ContactEnquiriesWidget() {
@@ -174,6 +239,7 @@ export default function MemorialsPage() {
         </Link>}
       </div>
       {!familyUser && isFuneralHomeAdmin(user?.role) && <ContactEnquiriesWidget />}
+      {!familyUser && isFuneralHomeAdmin(user?.role) && <TrendingMemorialsWidget />}
       <div className="mb-6 flex flex-wrap gap-2">
         {(['ALL', 'DRAFT', 'PAID_PENDING', 'PUBLISHED', 'LOCKED', 'EXPIRED'] as const).map((item) => (
           <button
@@ -222,6 +288,7 @@ export default function MemorialsPage() {
                   >
                     <h2 className="font-display text-xl text-ink">
                       {m.deceasedName}
+                      <MemorialMilestoneBadge memorial={m} />
                     </h2>
                   </Link>
                   <div className="mt-2 flex flex-col gap-1 text-sm text-muted sm:flex-row sm:flex-wrap sm:gap-4">

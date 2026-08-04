@@ -28,6 +28,7 @@ import {
   PlatformFuneralHomesPage, PlatformPaymentsPage, PlatformSupportPage, PlatformUsersPage,
 } from './pages/PlatformPages';
 import FeatureManagementPage from './pages/FeatureManagementPage';
+import RevenueCenterPage from './pages/RevenueCenterPage';
 
 function isFamilyRole(role?: string) {
   return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
@@ -129,6 +130,7 @@ function AppRoutes() {
         <Route path="admin-owner/users" element={<SuperAdminOnly><PlatformUsersPage /></SuperAdminOnly>} />
         <Route path="admin-owner/support" element={<SuperAdminOnly><PlatformSupportPage /></SuperAdminOnly>} />
         <Route path="admin-owner/analytics" element={<SuperAdminOnly><PlatformAnalyticsPage /></SuperAdminOnly>} />
+        <Route path="admin-owner/revenue" element={<SuperAdminOnly><RevenueCenterPage /></SuperAdminOnly>} />
         <Route path="admin-owner/audit-logs" element={<SuperAdminOnly><PlatformAuditLogsPage /></SuperAdminOnly>} />
         <Route path="admin-owner/features" element={<SuperAdminOnly><FeatureManagementPage /></SuperAdminOnly>} />
         <Route path="platform" element={<Navigate to="/admin-owner" replace />} />

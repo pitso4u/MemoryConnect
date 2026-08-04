@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { Prisma } from '../generated/prisma';
 import { prisma } from '../lib/prisma';
 import { formatMemorial } from '../lib/utils';
@@ -11,6 +11,7 @@ import { isPubliclyViewable, MEMORIAL_STATUS } from '../lib/publishing';
 import { verifyPreviewToken, verifyQAToken } from '../middleware/auth';
 import { z } from 'zod';
 import { DEMO_SLUG, demoMemorialSnapshot, demoProgramme } from '../lib/demoMemorial';
+import { applyPerformanceEvent, finalizeDueMemorials } from '../lib/performance';
 
 const router = Router();
 
@@ -140,6 +141,7 @@ router.post('/memorials/:slug/view', async (req, res) => {
 
     const hash = visitorHash(body.visitorId, req.ip, userAgent || undefined);
     const bucket = dateBucket();
+    const now = new Date();
     let counted = false;
     const updated = await prisma.$transaction(async (tx) => {
       try {
@@ -150,6 +152,7 @@ router.post('/memorials/:slug/view', async (req, res) => {
             dateBucket: bucket,
             userAgent,
             referrer: req.get('referer')?.slice(0, 1000) || null,
+            createdAt: now,
           },
         });
         counted = true;
@@ -160,7 +163,9 @@ router.post('/memorials/:slug/view', async (req, res) => {
         }
         throw error;
       }
-      return tx.memorial.update({ where: { id: memorial.id }, data: { viewCount: { increment: 1 } } });
+      const updatedMemorial = await tx.memorial.update({ where: { id: memorial.id }, data: { viewCount: { increment: 1 } } });
+      await applyPerformanceEvent(tx, { id: memorial.id, publishedAt: memorial.publishedAt }, 'view', { visitorHash: hash, now }).catch(() => undefined);
+      return updatedMemorial;
     });
 
     res.json({ success: true, data: { counted, viewCount: updated.viewCount } });
@@ -169,6 +174,52 @@ router.post('/memorials/:slug/view', async (req, res) => {
     console.error('Record public memorial view error:', error);
     res.status(500).json({ success: false, message: 'Failed to record memorial view' });
   }
+});
+
+const engagementSchema = z.object({
+  visitorId: z.string().trim().min(12).max(200).optional(),
+});
+
+async function recordEngagement(req: Request, eventType: 'qr_scan' | 'share', res: any) {
+  try {
+    const slug = queryValue(req.params.slug);
+    if (slug === DEMO_SLUG) return res.json({ success: true, data: { counted: false } });
+    if (req.get('x-memoryconnect-preview')?.toLowerCase() === 'true') {
+      return res.json({ success: true, data: { counted: false } });
+    }
+    const memorial = await prisma.memorial.findFirst({ where: { slug, deletedAt: null } });
+    if (!memorial) return res.status(404).json({ success: false, message: 'Memorial not found' });
+    if (!isPubliclyViewable(memorial)) return expired(res);
+    const now = new Date();
+    await prisma.$transaction(async (tx) => {
+      await applyPerformanceEvent(tx, { id: memorial.id, publishedAt: memorial.publishedAt }, eventType, {
+        visitorHash: visitorHash(undefined, req.ip, req.get('user-agent')?.slice(0, 500) || undefined),
+        now,
+      });
+    });
+    return res.json({ success: true, data: { counted: true } });
+  } catch (error) {
+    if (isZodError(error)) return res.status(400).json({ success: false, message: error.errors[0].message });
+    console.error(`Record memorial ${eventType} error:`, error);
+    return res.status(500).json({ success: false, message: 'Failed to record engagement' });
+  }
+}
+
+router.post('/memorials/:slug/qr-scan', async (req, res) => {
+  const body = engagementSchema.safeParse(req.body || {});
+  if (!body.success) return res.status(400).json({ success: false, message: body.error.errors[0].message });
+  return recordEngagement(req, 'qr_scan', res);
+});
+
+router.post('/memorials/:slug/share', async (req, res) => {
+  const body = engagementSchema.safeParse(req.body || {});
+  if (!body.success) return res.status(400).json({ success: false, message: body.error.errors[0].message });
+  return recordEngagement(req, 'share', res);
+});
+
+router.get('/performance/maintenance', async (_req, res) => {
+  const finalized = await finalizeDueMemorials().catch(() => 0);
+  res.json({ success: true, data: { finalized } });
 });
 
 router.get('/memorials/:slug/projector', async (req, res) => {

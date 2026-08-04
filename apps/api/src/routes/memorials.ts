@@ -24,6 +24,13 @@ import { permanentlyDeleteMemorial } from '../lib/retention';
 import { isZodError } from '../lib/validation';
 import { brandFromFuneralHome } from '@memorialconnect/shared';
 import { ensureUploadsDir, photoPublicUrl } from '../lib/uploads';
+import {
+  buildPerformancePayload,
+  dayForEvent,
+  finalizeDueMemorials,
+  MONITOR_WINDOW_MS,
+  PERFORMANCE_DAY_MS,
+} from '../lib/performance';
 
 const router = Router();
 
@@ -82,9 +89,28 @@ async function syncLockedMemorials(funeralHomeId: string) {
   });
 }
 
+function performanceListSummary(performance: {
+  total72HourViews: number;
+  performanceRating: string | null;
+  highestDailyViews: number;
+  highestMilestoneAwarded: string | null;
+  finalized: boolean;
+} | null) {
+  return performance
+    ? {
+        total72HourViews: performance.total72HourViews,
+        performanceRating: performance.performanceRating || 'New',
+        highestDailyViews: performance.highestDailyViews,
+        highestMilestoneAwarded: performance.highestMilestoneAwarded,
+        finalized: performance.finalized,
+      }
+    : null;
+}
+
 router.get('/', authenticate, async (req, res) => {
   try {
-    if (isFamilyRole(req.user!.role)) {
+    const role = normalizeRole(req.user!.role);
+    if (isFamilyRole(role)) {
       const access = await prisma.memorialAccess.findMany({
         where: { userId: req.user!.userId, memorial: { status: { not: MEMORIAL_STATUS.DELETED } } },
         include: { memorial: { include: { funeralHome: true } } },
@@ -95,15 +121,34 @@ router.get('/', authenticate, async (req, res) => {
         funeralHome: { ...item.memorial.funeralHome, brand: brandFromFuneralHome(item.memorial.funeralHome) },
       })) });
     }
-    if (!req.user!.funeralHomeId || !isFuneralHomeRole(req.user!.role)) {
+    if (role === ROLES.SUPER_ADMIN) {
+      const memorials = await prisma.memorial.findMany({
+        where: { status: { not: MEMORIAL_STATUS.DELETED } },
+        orderBy: { updatedAt: 'desc' },
+        include: { funeralHome: true, performance: true },
+      });
+      return res.json({
+        success: true,
+        data: memorials.map((item) => ({
+          ...formatMemorial(item as unknown as Record<string, unknown>),
+          performance: performanceListSummary(item.performance),
+          funeralHome: { ...item.funeralHome, brand: brandFromFuneralHome(item.funeralHome) },
+        })),
+      });
+    }
+    if (!req.user!.funeralHomeId || !isFuneralHomeRole(role)) {
       return res.status(403).json({ success: false, error: 'Funeral home access required' });
     }
     await syncLockedMemorials(req.user!.funeralHomeId);
     const memorials = await prisma.memorial.findMany({
       where: { funeralHomeId: req.user!.funeralHomeId, status: { not: MEMORIAL_STATUS.DELETED } },
       orderBy: { updatedAt: 'desc' },
+      include: { performance: true },
     });
-    res.json({ success: true, data: memorials.map((item) => formatMemorial(item as unknown as Record<string, unknown>)) });
+    res.json({ success: true, data: memorials.map((item) => ({
+      ...formatMemorial(item as unknown as Record<string, unknown>),
+      performance: performanceListSummary(item.performance),
+    })) });
   } catch (error) {
     console.error('List memorials error:', error);
     res.status(500).json({ success: false, error: 'Failed to load memorials' });
@@ -204,9 +249,10 @@ router.get('/:id/analytics', authenticate, async (req, res) => {
     where: { funeralHomeId: req.user!.funeralHomeId, status: { not: MEMORIAL_STATUS.DELETED } },
     select: { id: true, deceasedName: true, viewCount: true },
   });
-  const [viewsToday, viewsLast7Days] = await Promise.all([
+  const [viewsToday, viewsLast7Days, performance] = await Promise.all([
     prisma.memorialView.count({ where: { memorialId: memorial.id, createdAt: { gte: today } } }),
     prisma.memorialView.count({ where: { memorialId: memorial.id, createdAt: { gte: sevenDaysAgo } } }),
+    buildPerformancePayload({ id: memorial.id, publishedAt: memorial.publishedAt }, now),
   ]);
   const topViewedMemorials = [...homeMemorials]
     .sort((a, b) => b.viewCount - a.viewCount)
@@ -219,6 +265,152 @@ router.get('/:id/analytics', authenticate, async (req, res) => {
       viewsLast7Days,
       viewsByMemorial: homeMemorials,
       topViewedMemorials,
+      performance,
+    },
+  });
+});
+
+// Funeral-home 72-hour performance summary: trending memorials, historical
+// averages, and spotlight rankings for the dashboard widget.
+router.get('/performance/summary', authenticate, async (req, res) => {
+  if (!req.user!.funeralHomeId || !isFuneralHomeRole(req.user!.role)) {
+    return res.status(403).json({ success: false, error: 'Analytics are only available to funeral home users' });
+  }
+  const access = await prisma.funeralHome.findUnique({ where: { id: req.user!.funeralHomeId }, select: { analyticsAccessEnabled: true } });
+  if (!access?.analyticsAccessEnabled) return res.status(403).json({ success: false, error: 'Analytics access is not enabled for this funeral home' });
+
+  const now = new Date();
+  await finalizeDueMemorials(now);
+
+  const memorials = await prisma.memorial.findMany({
+    where: {
+      funeralHomeId: req.user!.funeralHomeId,
+      status: { not: MEMORIAL_STATUS.DELETED },
+      publishedAt: { not: null },
+    },
+    include: { performance: true },
+  });
+
+  const trending = memorials
+    .filter((memorial) => {
+      const day = dayForEvent(memorial.publishedAt, now);
+      return day !== null;
+    })
+    .map((memorial) => {
+      const day = dayForEvent(memorial.publishedAt, now)!;
+      const performance = memorial.performance;
+      const currentDayViews =
+        (day === 1 ? performance?.day1Views : day === 2 ? performance?.day2Views : performance?.day3Views) || 0;
+      const total72HourViews = performance?.total72HourViews || 0;
+      const elapsed = now.getTime() - memorial.publishedAt!.getTime();
+      const elapsedDay = Math.min(3, Math.max(1, Math.floor(elapsed / PERFORMANCE_DAY_MS) + 1));
+      return {
+        id: memorial.id,
+        slug: memorial.slug,
+        deceasedName: memorial.deceasedName,
+        status: memorial.status,
+        publishedAt: memorial.publishedAt!.toISOString(),
+        day: elapsedDay,
+        currentDayViews,
+        total72HourViews,
+        uniqueVisitors:
+          (day === 1 ? performance?.day1UniqueVisitors : day === 2 ? performance?.day2UniqueVisitors : performance?.day3UniqueVisitors) || 0,
+        performanceRating: performance?.performanceRating || 'New',
+        highestMilestoneAwarded: performance?.highestMilestoneAwarded || null,
+        finalized: Boolean(performance?.finalized),
+      };
+    })
+    .sort((a, b) => b.currentDayViews - a.currentDayViews)
+    .slice(0, 10);
+
+  const withStats = memorials.map((memorial) => {
+    const performance = memorial.performance;
+    return {
+      day1Views: performance?.day1Views || 0,
+      day2Views: performance?.day2Views || 0,
+      day3Views: performance?.day3Views || 0,
+      total72HourViews: performance?.total72HourViews || 0,
+      qrScans: (performance?.day1QrScans || 0) + (performance?.day2QrScans || 0) + (performance?.day3QrScans || 0),
+    };
+  });
+
+  const average = (picker: (row: { day1Views: number; day2Views: number; day3Views: number }) => number) => {
+    if (withStats.length === 0) return 0;
+    return Math.round(withStats.reduce((sum, row) => sum + picker(row), 0) / withStats.length);
+  };
+  const averageDay1Views = average((row) => row.day1Views);
+  const averageDay2Views = average((row) => row.day2Views);
+  const averageDay3Views = average((row) => row.day3Views);
+
+  const total = (picker: (row: { total72HourViews: number; qrScans: number }) => number) =>
+    withStats.reduce((sum, row) => sum + picker(row), 0);
+
+  const byTotal = [...memorials].sort(
+    (a, b) => (b.performance?.total72HourViews || 0) - (a.performance?.total72HourViews || 0),
+  );
+  const bestPerforming = byTotal[0] && byTotal[0].performance && byTotal[0].performance.total72HourViews > 0
+    ? {
+        id: byTotal[0].id,
+        slug: byTotal[0].slug,
+        deceasedName: byTotal[0].deceasedName,
+        total72HourViews: byTotal[0].performance!.total72HourViews,
+        highestMilestoneAwarded: byTotal[0].performance!.highestMilestoneAwarded || null,
+      }
+    : null;
+
+  const byQrScans = [...memorials].sort(
+    (a, b) =>
+      ((b.performance?.day1QrScans || 0) + (b.performance?.day2QrScans || 0) + (b.performance?.day3QrScans || 0)) -
+      ((a.performance?.day1QrScans || 0) + (a.performance?.day2QrScans || 0) + (a.performance?.day3QrScans || 0)),
+  );
+  const highestQrScansRow = byQrScans[0];
+  const highestQrScans = highestQrScansRow && (highestQrScansRow.performance?.day1QrScans || 0) + (highestQrScansRow.performance?.day2QrScans || 0) + (highestQrScansRow.performance?.day3QrScans || 0) > 0
+    ? {
+        id: highestQrScansRow.id,
+        slug: highestQrScansRow.slug,
+        deceasedName: highestQrScansRow.deceasedName,
+        qrScans: (highestQrScansRow.performance?.day1QrScans || 0) + (highestQrScansRow.performance?.day2QrScans || 0) + (highestQrScansRow.performance?.day3QrScans || 0),
+      }
+    : null;
+
+  const fastestGrowing = memorials
+    .map((memorial) => {
+      const performance = memorial.performance;
+      const day1 = performance?.day1Views || 0;
+      const day2 = performance?.day2Views || 0;
+      const day3 = performance?.day3Views || 0;
+      const d1to2 = day1 > 0 ? (day2 - day1) / day1 : day2 > 0 ? 1 : 0;
+      const d2to3 = day2 > 0 ? (day3 - day2) / day2 : day3 > 0 ? 1 : 0;
+      return { memorial, growth: Math.max(d1to2, d2to3, 0) };
+    })
+    .filter((row) => row.growth > 0)
+    .sort((a, b) => b.growth - a.growth)[0];
+
+  res.json({
+    success: true,
+    data: {
+      trending,
+      averages: {
+        day1Views: averageDay1Views,
+        day2Views: averageDay2Views,
+        day3Views: averageDay3Views,
+        total72HourViews: withStats.length ? Math.round(total((row) => row.total72HourViews) / withStats.length) : 0,
+        qrScans: withStats.length ? Math.round(total((row) => row.qrScans) / withStats.length) : 0,
+      },
+      bestPerforming,
+      highestQrScans,
+      fastestGrowing: fastestGrowing
+        ? {
+            id: fastestGrowing.memorial.id,
+            slug: fastestGrowing.memorial.slug,
+            deceasedName: fastestGrowing.memorial.deceasedName,
+            growthPercent: Math.round(fastestGrowing.growth * 100),
+          }
+        : null,
+      monitoringCount: memorials.filter((memorial) => {
+        const elapsed = now.getTime() - memorial.publishedAt!.getTime();
+        return elapsed >= 0 && elapsed < MONITOR_WINDOW_MS;
+      }).length,
     },
   });
 });

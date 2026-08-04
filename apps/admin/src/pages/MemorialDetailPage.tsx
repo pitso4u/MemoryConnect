@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api, FamilyAccess, FamilyInvitation, MemorialAnalytics, MemorialDetail, ProgrammeItem } from '../lib/api';
 import MemorialQrCode from '../components/MemorialQrCode';
 import FuneralFeedbackPanel from '../components/memorial/FuneralFeedbackPanel';
+import MemorialPerformancePanel from '../components/memorial/MemorialPerformancePanel';
 import { MemorialHeader } from '../components/memorial/MemorialHeader';
 import { ProjectorControls } from '../components/memorial/ProjectorControls';
 import { ProgrammeEditor } from '../components/memorial/ProgrammeEditor';
@@ -580,7 +581,7 @@ export default function MemorialDetailPage({ initialTab = 'programme' }: { initi
         timezone={memorial.timezone}
       />}
 
-      {analytics && (
+{analytics && (
         <section className="mt-8 rounded-2xl border border-parchment-dark bg-white p-6">
           <div className="flex items-center gap-2"><BarChart3 size={19} className="text-gold-dark" /><h2 className="font-display text-2xl text-ink">Public viewing</h2></div>
           <div className="mt-5 grid gap-4 sm:grid-cols-3">
@@ -590,6 +591,8 @@ export default function MemorialDetailPage({ initialTab = 'programme' }: { initi
           </div>
         </section>
       )}
+
+      {analytics?.performance && <MemorialPerformancePanel performance={analytics.performance} />}
     </div>
   );
 }

@@ -100,6 +100,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ visitorId }),
     }),
+  recordQrScan: (slug: string, visitorId: string) =>
+    request<{ counted: boolean }>(`/api/v1/public/memorials/${slug}/qr-scan`, {
+      method: 'POST',
+      body: JSON.stringify({ visitorId }),
+    }),
+  recordShare: (slug: string, visitorId: string) =>
+    request<{ counted: boolean }>(`/api/v1/public/memorials/${slug}/share`, {
+      method: 'POST',
+      body: JSON.stringify({ visitorId }),
+    }),
   getProjector: (slug: string, previewToken?: string) => request<ProjectorData>(`/api/v1/public/memorials/${slug}/projector${previewToken ? `?preview=${encodeURIComponent(previewToken)}` : ''}`),
   submitTribute: (slug: string, data: { authorName: string; message: string }) =>
     request<{ pending: boolean }>(`/api/v1/public/memorials/${slug}/tributes`, {
@@ -173,12 +183,21 @@ export interface BrochurePublic {
   coverImageUrl?: string | null;
   description?: string | null;
   pdfUrl?: string | null;
+  includedItems?: string[];
+  price?: string | null;
+  depositRequired?: boolean;
+  monthlyPaymentAvailable?: boolean;
+  financeAvailable?: boolean;
   ctaEnabled: boolean;
+  ctaType?: string | null;
   ctaText?: string | null;
   ctaUrl?: string | null;
   whatsappNumber?: string | null;
   phoneNumber?: string | null;
   emailAddress?: string | null;
+  contactPerson?: string | null;
+  branchName?: string | null;
+  websiteUrl?: string | null;
   seoTitle?: string | null;
   seoDescription?: string | null;
   viewCount: number;

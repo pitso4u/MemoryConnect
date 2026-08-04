@@ -1,6 +1,9 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
 import { getApiUrl } from '../lib/config';
 import type { ResolvedFeature } from '@memorialconnect/shared';
+
+/** How often a signed-in session re-fetches /auth/my-features so owner-side flag changes propagate deterministically. */
+const FEATURES_POLL_MS = 30_000;
 
 interface User {
   id: string;
@@ -30,21 +33,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [featuresReady, setFeaturesReady] = useState(false);
   const [resolvedFeatures, setResolvedFeatures] = useState<ResolvedFeature[]>([]);
+  const refreshingRef = useRef(false);
 
   const refreshFeatures = useCallback(async () => {
+    if (refreshingRef.current) return;
     const saved = localStorage.getItem('mc_token');
     if (!saved) {
       setResolvedFeatures([]);
       setFeaturesReady(true);
       return;
     }
+    refreshingRef.current = true;
     try {
-      const res = await fetch(`${getApiUrl()}/api/v1/auth/my-features`, {
-        headers: { Authorization: `Bearer ${saved}` },
-      });
+      const headers: Record<string, string> = { Authorization: `Bearer ${saved}` };
+      const version = localStorage.getItem('mc_feature_version');
+      if (version) headers['If-None-Match'] = version;
+      const res = await fetch(`${getApiUrl()}/api/v1/auth/my-features`, { headers });
+      if (res.status === 304) {
+        // Unchanged since the last fetch; keep the current feature set.
+        return;
+      }
       if (res.ok) {
         const json = await res.json();
         setResolvedFeatures(json.data?.features ?? []);
+        const next = json.data?.featureVersion;
+        if (next != null) localStorage.setItem('mc_feature_version', String(next));
       } else {
         setResolvedFeatures([]);
       }
@@ -52,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Feature availability is best-effort; the app still renders without it.
       setResolvedFeatures([]);
     } finally {
+      refreshingRef.current = false;
       setFeaturesReady(true);
     }
   }, []);
@@ -69,13 +83,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, [refreshFeatures]);
 
-  // Refetch feature availability whenever the tab regains focus so a platform
-  // owner toggling a flag is reflected immediately in this session's UI.
+  // Refetch feature availability whenever the tab regains focus or the browser
+  // regains network connectivity so a platform owner toggling a flag is reflected
+  // immediately in this session's UI.
   useEffect(() => {
-    const onFocus = () => { void refreshFeatures(); };
+    const refresh = () => { void refreshFeatures(); };
+    const onFocus = () => refresh();
+    const onVisibility = () => { if (document.visibilityState === 'visible') refresh(); };
+    const onOnline = () => refresh();
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('online', onOnline);
+    };
   }, [refreshFeatures]);
+
+  // Deterministic propagation: while signed in, poll so feature changes made by a
+  // platform owner reach this already-open session without a logout, reload, or
+  // tab-focus event.
+  useEffect(() => {
+    if (!token) return;
+    const id = window.setInterval(() => { void refreshFeatures(); }, FEATURES_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [token, refreshFeatures]);
 
   const login = (newToken: string, newUser: User) => {
     localStorage.setItem('mc_token', newToken);
@@ -88,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     localStorage.removeItem('mc_token');
     localStorage.removeItem('mc_user');
+    localStorage.removeItem('mc_feature_version');
     setToken(null);
     setUser(null);
     setResolvedFeatures([]);

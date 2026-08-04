@@ -170,6 +170,7 @@ model Memorial {
   photos                Photo[]
   tributes              Tribute[]
   views                  MemorialView[]
+  performance            MemorialPerformance?
   usageLedger            UsageLedger[]
   familyInvitations      FamilyInvitation[]
   accessGrants           MemorialAccess[]
@@ -426,6 +427,39 @@ model MemorialView {
   @@index([createdAt])
 }
 
+// First-72-hour memorial performance analytics. Values are updated
+// incrementally as events occur and finalized once the 72-hour monitoring
+// window closes so history is preserved without recalculating raw events.
+model MemorialPerformance {
+  id                      String    @id @default(cuid())
+  memorialId              String    @unique
+  memorial                Memorial  @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  day1Views               Int       @default(0)
+  day2Views               Int       @default(0)
+  day3Views               Int       @default(0)
+  day1UniqueVisitors      Int       @default(0)
+  day2UniqueVisitors      Int       @default(0)
+  day3UniqueVisitors      Int       @default(0)
+  day1QrScans             Int       @default(0)
+  day2QrScans             Int       @default(0)
+  day3QrScans             Int       @default(0)
+  day1Shares              Int       @default(0)
+  day2Shares              Int       @default(0)
+  day3Shares              Int       @default(0)
+  total72HourViews        Int       @default(0)
+  performanceRating       String?
+  highestDailyViews       Int       @default(0)
+  highestMilestoneAwarded String?
+  milestones              Json?
+  finalized               Boolean   @default(false)
+  finalizedAt             DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@index([memorialId])
+  @@map("MemorialPerformance")
+}
+
 model MemorialLocation {
   id          String   @id @default(cuid())
   memorialId  String
@@ -556,12 +590,21 @@ model Brochure {
   coverImageUrl   String?
   description     String?
   pdfUrl          String?
+  includedItems   Json?
+  price           String?
+  depositRequired Boolean     @default(false)
+  monthlyPaymentAvailable Boolean @default(false)
+  financeAvailable Boolean    @default(false)
   ctaEnabled      Boolean     @default(true)
+  ctaType         String?
   ctaText         String?     @default("Enquire Now")
   ctaUrl          String?
   whatsappNumber  String?
   phoneNumber     String?
   emailAddress    String?
+  contactPerson   String?
+  branchName      String?
+  websiteUrl      String?
   seoTitle        String?
   seoDescription  String?
   published       Boolean     @default(false)

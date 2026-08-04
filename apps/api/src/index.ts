@@ -12,6 +12,7 @@ import paymentRoutes from './routes/payments';
 import adminRoutes from './routes/admin';
 import familyRoutes from './routes/family';
 import platformRoutes from './routes/platform';
+import commandCenterRoutes from './routes/commandCenter';
 import feedbackRoutes from './routes/feedback';
 import marketingRoutes from './routes/marketing';
 import publicMarketingRoutes from './routes/public-marketing';
@@ -137,6 +138,7 @@ app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/family', familyRoutes);
 app.use('/api/v1/platform', platformRoutes);
+app.use('/api/v1/platform', commandCenterRoutes);
 app.use('/api/v1/entitlement', entitlementRoutes);
 app.use('/api/v1', feedbackRoutes);
 

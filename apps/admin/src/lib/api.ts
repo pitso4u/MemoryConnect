@@ -25,6 +25,7 @@ import type {
   EntitlementSnapshot,
   PlatformCommercialSettings,
   MemorialCreditPurchase,
+  MemorialPerformanceSummary,
 } from '@memorialconnect/shared';
 
 const API_URL = getApiUrl();
@@ -206,6 +207,9 @@ export const api = {
   getMemorialAnalytics: (id: string) =>
     request<MemorialAnalytics>(`/api/v1/memorials/${id}/analytics`),
 
+  getMemorialPerformanceSummary: () =>
+    request<MemorialPerformanceSummary>('/api/v1/memorials/performance/summary'),
+
   programmeNext: (id: string) =>
     request<MemorialDetail>(`/api/v1/memorials/${id}/programme/next`, { method: 'POST' }),
 
@@ -287,7 +291,11 @@ export const api = {
   getPlatformUsers: () => request<PlatformUser[]>('/api/v1/platform/users'),
   getPlatformSupport: () => request<PlatformSupport>('/api/v1/platform/support'),
   getPlatformAnalytics: () => request<PlatformAnalytics>('/api/v1/platform/analytics'),
+  getPlatformRevenue: () => request<PlatformRevenue>('/api/v1/platform/revenue'),
   getPlatformAuditLogs: () => request<PlatformAuditLog[]>('/api/v1/platform/audit-logs'),
+  getPlatformDashboard: () => request<PlatformDashboard>('/api/v1/platform/dashboard'),
+  searchPlatform: (query: string) => request<PlatformSearchResults>(`/api/v1/platform/search?q=${encodeURIComponent(query)}`),
+  getPlatformNotifications: () => request<PlatformNotification[]>('/api/v1/platform/notifications'),
   suspendPlatformFuneralHome: (id: string) => request(`/api/v1/platform/funeral-homes/${id}/suspend`, { method: 'POST' }),
   reactivatePlatformFuneralHome: (id: string) => request(`/api/v1/platform/funeral-homes/${id}/reactivate`, { method: 'POST' }),
   sendPlatformPasswordReset: (id: string) =>
@@ -736,6 +744,7 @@ export interface PlatformFuneralHome {
   trialMemorialsUsed?: number;
   memorialCreditsPurchased?: number;
   memorialCreditsRemaining?: number;
+  health?: PlatformHomeHealth;
 }
 
 export interface PlatformPayment {
@@ -787,6 +796,57 @@ export interface PlatformAnalytics {
   mostViewedMemorials: Array<{ id: string; deceasedName: string; slug: string; viewCount: number; funeralHome: { id: string; name: string } }>;
   topHomesByMemorials: Array<{ id: string; name: string; memorialCount: number }>;
   topHomesByRevenue: Array<{ id: string; name: string; revenueCents: number }>;
+  performance: {
+    averageFirstDayViews: number;
+    average72HourViews: number;
+    memorialsOver100Views: number;
+    memorialsOver500Views: number;
+    monitoringCount: number;
+    trendingMemorials: Array<{
+      id: string;
+      slug: string;
+      deceasedName: string;
+      funeralHome: { id: string; name: string };
+      day: number | null;
+      currentDayViews: number;
+      total72HourViews: number;
+      performanceRating: string;
+      highestMilestoneAwarded: string | null;
+      monitoring: boolean;
+    }>;
+  };
+}
+
+export interface PlatformRevenueTrendEntry {
+  month: string;
+  paymentsCents: number;
+  creditsCents: number;
+  totalCents: number;
+}
+
+export interface PlatformRevenueSummary {
+  thisYearCents: number;
+  thisMonthCents: number;
+  lastMonthCents: number;
+  growthPct: number;
+}
+
+export interface PlatformRevenueTopHome {
+  id: string;
+  name: string;
+  revenueCents: number;
+}
+
+export interface PlatformRevenueStatusBreakdown {
+  payments: { successful: number; failed: number; pending: number };
+  creditPurchases: { successful: number; failed: number; pending: number };
+}
+
+export interface PlatformRevenue {
+  trend: PlatformRevenueTrendEntry[];
+  summary: PlatformRevenueSummary;
+  topHomes: PlatformRevenueTopHome[];
+  statusBreakdown: PlatformRevenueStatusBreakdown;
 }
 
 export interface PlatformFuneralHomeDetail extends FuneralHomeProfile {
@@ -805,6 +865,20 @@ export interface PlatformFuneralHomeDetail extends FuneralHomeProfile {
   creditPurchases: MemorialCreditPurchase[];
   familyInvitations: Array<FamilyInvitation & { memorial: { deceasedName: string } }>;
   platformAuditLogs: PlatformAuditLog[];
+  featureOverrides: Array<{
+    enabled: boolean;
+    releaseChannelOverride?: string | null;
+    enabledAt: string;
+    featureKey: string;
+    feature?: { key: string; name: string; releaseChannel: string; premium?: boolean } | null;
+  }>;
+  vehicles: Array<{ id: string; name: string; registrationNumber: string; vehicleType: string; status: string }>;
+  assets: Array<{ id: string; name: string; category: string; status: string }>;
+  storageBytes?: number;
+  health?: PlatformHomeHealth;
+  plan?: string;
+  edition?: string;
+  _count: { users: number; memorials: number; vehicles: number; assets: number };
 }
 
 export interface MarketingDashboard {
@@ -825,6 +899,203 @@ export interface MarketingDashboard {
     brochure?: { title: string; slug: string };
     createdAt: string;
   }>;
+}
+
+export type ServiceStatus = 'ok' | 'warning' | 'critical';
+
+export interface PlatformServiceHealth {
+  status: ServiceStatus;
+  label: string;
+  detail?: string;
+}
+
+export interface PlatformServerLoad {
+  version: string;
+  uptimeSeconds: number;
+  cpu: { loadAverage: [number, number, number]; percent: number };
+  memory: { usedMb: number; totalMb: number; percent: number };
+  storage: { usedBytes: number };
+}
+
+export interface PlatformTodayNumbers {
+  revenueCents: number;
+  memorialsCreated: number;
+  memorialsPublished: number;
+  visitors: number;
+  qrScans: number;
+  photoUploads: number;
+  videosUploaded: number;
+  newHomes: number;
+  enquiries: number;
+}
+
+export type ActivityType = 'memorial' | 'payment' | 'home' | 'feature' | 'audit';
+export interface PlatformActivity {
+  id: string;
+  type: ActivityType;
+  title: string;
+  detail: string;
+  funeralHomeName: string | null;
+  link: string;
+  createdAt: string | null;
+}
+
+export interface PlatformHomeHealth {
+  segment: string;
+  label: string;
+  color: 'emerald' | 'amber' | 'red' | 'slate';
+  reasons: string[];
+}
+
+export interface PlatformFuneralHomeHealthRow {
+  id: string;
+  name: string;
+  status: string;
+  segment: string;
+  segmentLabel: string;
+  score?: number;
+  reasons: string[];
+  revenueCents: number;
+  memorialCount: number;
+  lastActivityAt: string;
+}
+
+export interface PlatformCustomerSuccess {
+  segments: Record<string, number>;
+  total: number;
+  customerHealth?: PlatformFuneralHomeHealthRow[];
+  atRiskHomes: PlatformFuneralHomeHealthRow[];
+}
+
+export interface PlatformTodayMemorials {
+  created: number;
+  published: number;
+  scheduled: number;
+  live: number;
+}
+
+export interface PlatformTodayRevenue {
+  todayCents: number;
+  weekCents: number;
+  monthCents: number;
+  prevMonthCents: number;
+  pendingCents: number;
+  failedCents: number;
+  pendingCount: number;
+  failedCount: number;
+}
+
+export interface PlatformUpcomingService {
+  id: string;
+  deceasedName: string;
+  serviceDate: string | null;
+  serviceEndTime?: string | null;
+  serviceVenue?: string | null;
+  status: string;
+  missingCover: boolean;
+  published: boolean;
+  homeId: string;
+  homeName: string;
+}
+
+export interface PlatformAttentionItem {
+  id: string;
+  kind: 'memorial' | 'home';
+  title: string;
+  detail: string;
+  reason: string;
+  homeId?: string | null;
+  homeName?: string | null;
+  link?: string | null;
+  severity: 'critical' | 'warning' | 'info';
+}
+
+export interface PlatformPipeline {
+  draft: number;
+  ready: number;
+  scheduled: number;
+  published: number;
+  archived: number;
+}
+
+export interface PlatformConversionFunnel {
+  visitedWebsite: number;
+  registered: number;
+  startedTrial: number;
+  publishedMemorial: number;
+  paid: number;
+}
+
+export interface PlatformGeoRow {
+  province: string;
+  homes: number;
+  country: string;
+}
+
+export interface PlatformAssistRequest {
+  id: string;
+  homeId: string;
+  homeName: string;
+  request: string;
+  detail: string;
+  severity: 'critical' | 'warning';
+  actionLink: string;
+}
+
+export interface PlatformRevenuePoint {
+  label: string;
+  ts: number;
+  revenueCents: number;
+}
+
+export interface PlatformOperations {
+  todayMemorials: PlatformTodayMemorials;
+  todayRevenue: PlatformTodayRevenue;
+  upcomingServices: PlatformUpcomingService[];
+  requiringAttention: PlatformAttentionItem[];
+  pipeline: PlatformPipeline;
+  funnel: PlatformConversionFunnel;
+  geographic: PlatformGeoRow[];
+  assistRequests: PlatformAssistRequest[];
+  revenueGraph: PlatformRevenuePoint[];
+}
+
+export interface PlatformDashboard {
+  health: Record<string, PlatformServiceHealth>;
+  server: PlatformServerLoad;
+  today: PlatformTodayNumbers;
+  activity: PlatformActivity[];
+  operations: PlatformOperations;
+  customerSuccess: PlatformCustomerSuccess;
+}
+
+export interface SearchResult {
+  id: string;
+  name?: string;
+  label?: string;
+  detail?: string;
+}
+
+export interface PlatformSearchResults {
+  query: string;
+  totalResults: number;
+  funeralHomes: Array<{ id: string; name: string; email: string; status: string }>;
+  users: Array<{ id: string; name: string; email: string; role: string; funeralHomeId?: string | null }>;
+  memorials: Array<{ id: string; deceasedName: string; slug: string; funeralHome: { id: string; name: string } }>;
+  qrCodes: Array<{ id: string; url: string; shortUrl?: string | null; scanCount: number; funeralHome: { id: string; name: string } }>;
+  payments: Array<{ id: string; paystackReference: string; amountCents: number; status: string; funeralHome: { name: string } }>;
+  features: Array<{ key: string; name: string; category: string; releaseChannel: string; enabledGlobally: boolean }>;
+  auditLogs: Array<{ id: string; action: string; targetType: string; targetId: string; createdAt: string }>;
+  enquiries: Array<{ id: string; fullName: string; emailAddress?: string | null; message?: string | null; createdAt: string; funeralHome: { id: string; name: string } }>;
+}
+
+export type NotificationSeverity = 'info' | 'warning' | 'critical';
+export interface PlatformNotification {
+  id: string;
+  severity: NotificationSeverity;
+  title: string;
+  detail: string;
+  link?: string;
 }
 
 export interface MarketingContact {
@@ -885,12 +1156,21 @@ export interface Brochure {
   coverImageUrl?: string | null;
   description?: string | null;
   pdfUrl?: string | null;
+  includedItems?: string[];
+  price?: string | null;
+  depositRequired?: boolean;
+  monthlyPaymentAvailable?: boolean;
+  financeAvailable?: boolean;
   ctaEnabled?: boolean;
+  ctaType?: string | null;
   ctaText?: string | null;
   ctaUrl?: string | null;
   whatsappNumber?: string | null;
   phoneNumber?: string | null;
   emailAddress?: string | null;
+  contactPerson?: string | null;
+  branchName?: string | null;
+  websiteUrl?: string | null;
   seoTitle?: string | null;
   seoDescription?: string | null;
   published?: boolean;
@@ -1124,7 +1404,7 @@ export const funeralResourceApi = {
 };
 
 export const featureApi = {
-  getFeatures: () => request<{ features: FeatureWithOverrides[]; auditCount: number }>('/api/v1/platform/features'),
+  getFeatures: () => request<{ features: FeatureWithOverrides[]; auditCount: number; featureVersion?: number }>('/api/v1/platform/features'),
   getAll: () => request<Feature[]>('/api/v1/platform/features/all'),
   getAuditLog: (limit = 100) => request<FeatureAuditLogEntry[]>(`/api/v1/platform/features/audit-log?limit=${limit}`),
   getFuneralHomes: () =>
@@ -1205,5 +1485,6 @@ export type {
   ResolvedFeature,
   FeatureAuditLogEntry,
   FeatureDependency,
+  MemorialPerformanceSummary,
 };
 

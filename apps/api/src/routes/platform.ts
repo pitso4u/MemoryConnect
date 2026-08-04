@@ -5,6 +5,13 @@ import { prisma } from '../lib/prisma';
 import { authenticate, requireRole, ROLES } from '../middleware/auth';
 import { env } from '../lib/env';
 import { getPlatformSettings, updatePlatformSettings } from '../lib/platformSettings';
+import { computeHomeHealth, HomeHealth } from '../lib/homeHealth';
+import {
+  dayForEvent,
+  finalizeDueMemorials,
+  MILESTONES,
+  MONITOR_WINDOW_MS,
+} from '../lib/performance';
 
 const router = Router();
 router.use(authenticate, requireRole([ROLES.SUPER_ADMIN]));
@@ -119,8 +126,8 @@ router.get('/funeral-homes', async (_req, res) => {
     include: {
       users: { select: { name: true, email: true, role: true, lastLoginAt: true }, orderBy: { createdAt: 'asc' } },
       _count: { select: { memorials: true } },
-      payments: { select: { amountCents: true, status: true, paidAt: true, updatedAt: true } },
-      memorials: { select: { updatedAt: true } },
+      payments: { select: { amountCents: true, status: true, paidAt: true, createdAt: true, updatedAt: true } },
+      memorials: { select: { createdAt: true, publishedAt: true, storageBytes: true, updatedAt: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -131,9 +138,33 @@ router.get('/funeral-homes', async (_req, res) => {
       const activityDates = [
         home.updatedAt,
         ...home.users.map((user) => user.lastLoginAt).filter(Boolean),
+        ...home.memorials.map((memorial) => memorial.createdAt),
         ...home.memorials.map((memorial) => memorial.updatedAt),
         ...home.payments.map((payment) => payment.updatedAt),
       ] as Date[];
+      const lastLoginAt = home.users
+        .map((user) => user.lastLoginAt)
+        .filter((u): u is Date => Boolean(u))
+        .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+      const lastMemorialCreatedAt = home.memorials
+        .map((memorial) => memorial.createdAt)
+        .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+      const storageBytes = home.memorials.reduce((sum, memorial) => sum + (memorial.storageBytes ?? 0), 0);
+      const health = computeHomeHealth({
+        status: home.status,
+        createdAt: home.createdAt,
+        trialStartsAt: home.trialStartsAt,
+        trialEndsAt: home.trialEndsAt,
+        lastLoginAt,
+        lastMemorialCreatedAt,
+        totalMemorials: home._count.memorials,
+        publishedMemorials: home.memorials.filter((memorial) => memorial.publishedAt).length,
+        storageBytes,
+        hasSuccessfulPayment: home.payments.some((payment) => isSuccessful(payment.status)),
+        hasCreditPurchase: false,
+        hasFailedPaymentRecently: home.payments.some((payment) => isFailed(payment.status)),
+        hasPendingPaymentOverdue: home.payments.some((payment) => isPending(payment.status)),
+      });
       return {
         id: home.id,
         name: home.name,
@@ -150,6 +181,7 @@ router.get('/funeral-homes', async (_req, res) => {
         trialMemorialsUsed: home.trialMemorialsUsed,
         memorialCreditsPurchased: home.memorialCreditsPurchased,
         memorialCreditsRemaining: home.memorialCreditsRemaining,
+        health: { segment: health.segment, label: health.label, color: health.color, reasons: health.reasons },
       };
     }),
   });
@@ -165,11 +197,50 @@ router.get('/funeral-homes/:id', async (req, res) => {
       creditPurchases: { orderBy: { createdAt: 'desc' }, take: 100 },
       familyInvitations: { orderBy: { createdAt: 'desc' }, take: 100, include: { memorial: { select: { deceasedName: true } } } },
       platformAuditLogs: { orderBy: { createdAt: 'desc' }, take: 100, include: { actor: { select: { name: true, email: true } } } },
+      featureOverrides: {
+        orderBy: { enabledAt: 'desc' },
+        include: { feature: { select: { key: true, name: true, releaseChannel: true, premium: true } } },
+      },
+      vehicles: { orderBy: { createdAt: 'desc' }, take: 50, select: { id: true, name: true, registrationNumber: true, vehicleType: true, status: true } },
+      assets: { orderBy: { createdAt: 'desc' }, take: 50, select: { id: true, name: true, category: true, status: true } },
+      _count: { select: { users: true, memorials: true, vehicles: true, assets: true } },
     },
   });
   if (!home) return res.status(404).json({ success: false, error: 'Funeral home not found' });
   await audit(req.user!.userId, 'FUNERAL_HOME_DETAIL_VIEWED', 'FUNERAL_HOME', home.id, home.id);
-  res.json({ success: true, data: home });
+  const lastLoginAt = home.users
+    .map((user) => user.lastLoginAt)
+    .filter((u): u is Date => Boolean(u))
+    .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+  const lastMemorialCreatedAt = home.memorials
+    .map((memorial) => memorial.createdAt)
+    .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+  const storageBytes = home.memorials.reduce((sum, memorial) => sum + (memorial.storageBytes ?? 0), 0);
+  const twoWeeksAgo = new Date(Date.now() - 14 * 86400000);
+  const threeDaysAgo = new Date(Date.now() - 3 * 86400000);
+  const health = computeHomeHealth({
+    status: home.status,
+    createdAt: home.createdAt,
+    trialStartsAt: home.trialStartsAt,
+    trialEndsAt: home.trialEndsAt,
+    lastLoginAt,
+    lastMemorialCreatedAt,
+    totalMemorials: home._count.memorials,
+    publishedMemorials: home.memorials.filter((memorial) => memorial.status === 'PUBLISHED').length,
+    storageBytes,
+    hasSuccessfulPayment: home.payments.some((payment) => isSuccessful(payment.status)),
+    hasCreditPurchase: home.creditPurchases.some((purchase) => isSuccessful(purchase.status)),
+    hasFailedPaymentRecently: home.payments.some((payment) => isFailed(payment.status) && payment.createdAt >= twoWeeksAgo),
+    hasPendingPaymentOverdue: home.payments.some((payment) => isPending(payment.status) && payment.createdAt < threeDaysAgo),
+  });
+  res.json({
+    success: true,
+    data: {
+      ...home,
+      storageBytes,
+      health: { segment: health.segment, label: health.label, color: health.color, reasons: health.reasons },
+    },
+  });
 });
 
 router.get('/payments', async (_req, res) => {
@@ -213,7 +284,10 @@ router.get('/support', async (_req, res) => {
 
 router.get('/analytics', async (_req, res) => {
   const today = startOfToday();
-  const [totalViews, viewsToday, memorials, homes] = await Promise.all([
+  const now = new Date();
+  await finalizeDueMemorials(now);
+
+  const [totalViews, viewsToday, memorials, homes, performanceRows, publishedMemorials] = await Promise.all([
     prisma.memorialView.count({ where: { memorial: { isDemo: false } } }),
     prisma.memorialView.count({ where: { createdAt: { gte: today }, memorial: { isDemo: false } } }),
     prisma.memorial.findMany({
@@ -229,6 +303,14 @@ router.get('/analytics', async (_req, res) => {
         payments: { select: { amountCents: true, status: true } },
       },
     }),
+    prisma.memorialPerformance.findMany({
+      where: { memorial: { isDemo: false } },
+      include: { memorial: { select: { id: true, deceasedName: true, slug: true, status: true, publishedAt: true, funeralHome: { select: { id: true, name: true } } } } },
+    }),
+    prisma.memorial.findMany({
+      where: { isDemo: false, publishedAt: { not: null }, deletedAt: null },
+      select: { id: true, deceasedName: true, slug: true, status: true, publishedAt: true, funeralHome: { select: { id: true, name: true } } },
+    }),
   ]);
   const byRevenue = homes.map((home) => ({
     id: home.id,
@@ -237,7 +319,74 @@ router.get('/analytics', async (_req, res) => {
   })).sort((a, b) => b.revenueCents - a.revenueCents).slice(0, 10);
   const byMemorials = homes.map((home) => ({ id: home.id, name: home.name, memorialCount: home._count.memorials }))
     .sort((a, b) => b.memorialCount - a.memorialCount).slice(0, 10);
-  res.json({ success: true, data: { totalViews, viewsToday, mostViewedMemorials: memorials, topHomesByMemorials: byMemorials, topHomesByRevenue: byRevenue } });
+
+  const trendingMemorials = publishedMemorials
+    .map((memorial) => {
+      const performance = performanceRows.find((row) => row.memorialId === memorial.id);
+      const day = dayForEvent(memorial.publishedAt, now);
+      const currentDayViews =
+        day === 1 ? (performance?.day1Views || 0)
+        : day === 2 ? (performance?.day2Views || 0)
+        : (performance?.day3Views || 0);
+      return {
+        id: memorial.id,
+        slug: memorial.slug,
+        deceasedName: memorial.deceasedName,
+        funeralHome: { id: memorial.funeralHome.id, name: memorial.funeralHome.name },
+        day,
+        currentDayViews,
+        total72HourViews: performance?.total72HourViews || 0,
+        performanceRating: performance?.performanceRating || 'New',
+        highestMilestoneAwarded: performance?.highestMilestoneAwarded || null,
+        monitoring: day !== null,
+      };
+    })
+    .filter((memorial) => memorial.monitoring)
+    .sort((a, b) => b.currentDayViews - a.currentDayViews)
+    .slice(0, 10);
+
+  const withStats = performanceRows.map((performance) => ({
+    day1Views: performance.day1Views,
+    day2Views: performance.day2Views,
+    day3Views: performance.day3Views,
+    total72HourViews: performance.total72HourViews,
+    highestMilestoneAwarded: performance.highestMilestoneAwarded,
+    memorial: performance.memorial,
+  }));
+
+  const average = (picker: (row: { day1Views: number; day2Views: number; day3Views: number }) => number) => {
+    if (withStats.length === 0) return 0;
+    return Math.round(withStats.reduce((sum, row) => sum + picker(row), 0) / withStats.length);
+  };
+  const averageFirstDayViews = average((row) => row.day1Views);
+  const average72HourViews = withStats.length
+    ? Math.round(withStats.reduce((sum, row) => sum + row.total72HourViews, 0) / withStats.length)
+    : 0;
+  const memorialsOver100Views = withStats.filter((row) => row.total72HourViews >= MILESTONES[0].threshold).length;
+  const memorialsOver500Views = withStats.filter((row) => row.total72HourViews >= MILESTONES[2].threshold).length;
+  const monitoringCount = publishedMemorials.filter((memorial) => {
+    const elapsed = now.getTime() - memorial.publishedAt!.getTime();
+    return elapsed >= 0 && elapsed < MONITOR_WINDOW_MS;
+  }).length;
+
+  res.json({
+    success: true,
+    data: {
+      totalViews,
+      viewsToday,
+      mostViewedMemorials: memorials,
+      topHomesByMemorials: byMemorials,
+      topHomesByRevenue: byRevenue,
+      performance: {
+        averageFirstDayViews,
+        average72HourViews,
+        memorialsOver100Views,
+        memorialsOver500Views,
+        monitoringCount,
+        trendingMemorials,
+      },
+    },
+  });
 });
 
 router.get('/audit-logs', async (_req, res) => {
@@ -379,6 +528,105 @@ router.post('/credit-purchases/:id/verify', async (req, res) => {
     previousStatus: purchase.status,
   });
   res.json({ success: true, data: updated });
+});
+
+// ── REVENUE CENTER ────────────────────────────────────────────────────────────
+
+const MONTHS = 12;
+function revenueMonthBuckets(): { label: string; start: Date; next: Date }[] {
+  const buckets: { label: string; start: Date; next: Date }[] = [];
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  for (let i = MONTHS - 1; i >= 0; i--) {
+    const monthStart = new Date(start.getFullYear(), start.getMonth() - i, 1);
+    const nextMonth = new Date(start.getFullYear(), start.getMonth() - i + 1, 1);
+    buckets.push({
+      label: `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}`,
+      start: monthStart,
+      next: nextMonth,
+    });
+  }
+  return buckets;
+}
+
+router.get('/revenue', async (_req, res) => {
+  try {
+    const payments = await prisma.payment.findMany({
+      select: { amountCents: true, status: true, paidAt: true, createdAt: true, funeralHomeId: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const purchases = await prisma.creditPurchase.findMany({
+      select: { amountCents: true, status: true, paidAt: true, createdAt: true, funeralHomeId: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const buckets = revenueMonthBuckets();
+    const byHome = new Map<string, { name: string; revenueCents: number }>();
+
+    const trend = buckets.map((bucket) => {
+      const paymentsCents = payments
+        .filter((p) => isSuccessful(p.status) && (p.paidAt || p.createdAt) >= bucket.start && (p.paidAt || p.createdAt) < bucket.next)
+        .reduce((sum, p) => sum + p.amountCents, 0);
+      const creditsCents = purchases
+        .filter((p) => isSuccessful(p.status) && (p.paidAt || p.createdAt) >= bucket.start && (p.paidAt || p.createdAt) < bucket.next)
+        .reduce((sum, p) => sum + p.amountCents, 0);
+      for (const p of payments) {
+        if (isSuccessful(p.status) && (p.paidAt || p.createdAt) >= bucket.start && (p.paidAt || p.createdAt) < bucket.next) {
+          byHome.set(p.funeralHomeId, { name: '', revenueCents: (byHome.get(p.funeralHomeId)?.revenueCents ?? 0) + p.amountCents });
+        }
+      }
+      for (const p of purchases) {
+        if (isSuccessful(p.status) && (p.paidAt || p.createdAt) >= bucket.start && (p.paidAt || p.createdAt) < bucket.next) {
+          byHome.set(p.funeralHomeId, { name: '', revenueCents: (byHome.get(p.funeralHomeId)?.revenueCents ?? 0) + p.amountCents });
+        }
+      }
+      return { month: bucket.label, paymentsCents, creditsCents, totalCents: paymentsCents + creditsCents };
+    });
+
+    const totalRevenueCents = (trend[trend.length - 1]?.totalCents ?? 0);
+    const thisYearCents = trend.reduce((sum, t) => sum + t.totalCents, 0);
+    const lastMonthCents = trend[trend.length - 2]?.totalCents ?? 0;
+    const thisMonthCents = trend[trend.length - 1]?.totalCents ?? 0;
+    const growthPct = lastMonthCents > 0 ? ((thisMonthCents - lastMonthCents) / lastMonthCents) * 100 : 0;
+
+    const homeNamesById = new Map<string, string>(
+      (await prisma.funeralHome.findMany({ select: { id: true, name: true } })).map((h) => [h.id, h.name]),
+    );
+
+    const topHomes = [...byHome.entries()]
+      .map(([id, agg]) => ({ id, name: homeNamesById.get(id) ?? id, revenueCents: agg.revenueCents }))
+      .sort((a, b) => b.revenueCents - a.revenueCents)
+      .slice(0, 10);
+
+    res.json({
+      success: true,
+      data: {
+        trend,
+        summary: {
+          thisYearCents,
+          thisMonthCents,
+          lastMonthCents,
+          growthPct: Math.round(growthPct * 10) / 10,
+        },
+        topHomes,
+        statusBreakdown: {
+          payments: {
+            successful: payments.filter((p) => isSuccessful(p.status)).length,
+            failed: payments.filter((p) => isFailed(p.status)).length,
+            pending: payments.filter((p) => isPending(p.status)).length,
+          },
+          creditPurchases: {
+            successful: purchases.filter((p) => isSuccessful(p.status)).length,
+            failed: purchases.filter((p) => isFailed(p.status)).length,
+            pending: purchases.filter((p) => isPending(p.status)).length,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Get platform revenue error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load revenue data' });
+  }
 });
 
 export default router;

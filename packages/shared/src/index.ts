@@ -211,6 +211,13 @@ export interface MemorialSummary {
   createdAt: string;
   updatedAt: string;
   logoUrl?: string;
+  performance?: {
+    total72HourViews: number;
+    performanceRating: string;
+    highestDailyViews: number;
+    highestMilestoneAwarded: string | null;
+    finalized: boolean;
+  };
 }
 
 /**
@@ -291,6 +298,91 @@ export interface MemorialAnalytics {
   viewsLast7Days: number;
   viewsByMemorial: Array<{ id: string; deceasedName: string; viewCount: number }>;
   topViewedMemorials: Array<{ id: string; deceasedName: string; viewCount: number }>;
+  performance?: MemorialPerformance;
+}
+
+// ── 72-Hour Memorial Performance Analytics ──────────────────────────────────
+
+export interface MemorialPerformanceDay {
+  day: number;
+  label: string;
+  views: number;
+  uniqueVisitors: number;
+  qrScans: number;
+  shares: number;
+  snapshot: boolean;
+  rating: string;
+}
+
+export interface MemorialPerformanceMilestone {
+  day: number;
+  badge: string;
+  label: string;
+  views: number;
+}
+
+export interface MemorialPerformance {
+  memorialId: string;
+  publishedAt: string | null;
+  monitoringActive: boolean;
+  finalized: boolean;
+  days: MemorialPerformanceDay[];
+  totals: {
+    views: number;
+    uniqueVisitors: number;
+    qrScans: number;
+    shares: number;
+    performanceRating: string;
+    highestDailyViews: number;
+    highestMilestoneAwarded: string | null;
+  };
+  milestones: MemorialPerformanceMilestone[];
+  trend: Array<{ day: number; views: number; changePercent: number | null }>;
+  snapshots: Array<{ day: number; views: number; visitors: number }>;
+}
+
+export interface MemorialPerformanceSummary {
+  trending: Array<{
+    id: string;
+    slug: string;
+    deceasedName: string;
+    status: string;
+    publishedAt: string;
+    day: number;
+    currentDayViews: number;
+    total72HourViews: number;
+    uniqueVisitors: number;
+    performanceRating: string;
+    highestMilestoneAwarded: string | null;
+    finalized: boolean;
+  }>;
+  averages: {
+    day1Views: number;
+    day2Views: number;
+    day3Views: number;
+    total72HourViews: number;
+    qrScans: number;
+  };
+  bestPerforming: {
+    id: string;
+    slug: string;
+    deceasedName: string;
+    total72HourViews: number;
+    highestMilestoneAwarded: string | null;
+  } | null;
+  highestQrScans: {
+    id: string;
+    slug: string;
+    deceasedName: string;
+    qrScans: number;
+  } | null;
+  fastestGrowing: {
+    id: string;
+    slug: string;
+    deceasedName: string;
+    growthPercent: number;
+  } | null;
+  monitoringCount: number;
 }
 
 export type MemorialLocationType = 'HOME' | 'CHURCH' | 'CEMETERY' | 'RECEPTION' | 'OTHER';
@@ -852,12 +944,21 @@ export const createBrochureSchema = z.object({
   coverImageUrl: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   pdfUrl: z.string().optional().nullable(),
+  includedItems: z.array(z.string().max(300)).optional(),
+  price: z.string().max(100).optional().nullable(),
+  depositRequired: z.boolean().optional(),
+  monthlyPaymentAvailable: z.boolean().optional(),
+  financeAvailable: z.boolean().optional(),
   ctaEnabled: z.boolean().optional(),
+  ctaType: z.enum(['call', 'whatsapp', 'email', 'branch', 'custom', 'enquire']).optional().nullable(),
   ctaText: z.string().max(100).optional().nullable(),
   ctaUrl: z.string().max(1000).optional().nullable(),
   whatsappNumber: z.string().max(50).optional().nullable(),
   phoneNumber: z.string().max(50).optional().nullable(),
   emailAddress: z.string().email().optional().nullable().or(z.literal('')),
+  contactPerson: z.string().max(200).optional().nullable(),
+  branchName: z.string().max(200).optional().nullable(),
+  websiteUrl: z.string().max(500).optional().nullable(),
   seoTitle: z.string().max(200).optional().nullable(),
   seoDescription: z.string().max(400).optional().nullable(),
   published: z.boolean().optional(),
@@ -1237,7 +1338,7 @@ export interface FuneralResourceReservation {
 // ── Feature Management Types ───────────────────────────────────────────────
 
 export const RELEASE_CHANNELS = [
-  'INTERNAL', 'QA', 'BETA', 'EARLY_ACCESS', 'GENERAL_AVAILABILITY', 'DEPRECATED', 'DISABLED',
+  'INTERNAL', 'QA', 'BETA', 'EARLY_ACCESS', 'GENERAL_AVAILABILITY', 'DEPRECATED', 'ARCHIVED', 'DISABLED',
 ] as const;
 
 export const FEATURE_CATEGORIES = [

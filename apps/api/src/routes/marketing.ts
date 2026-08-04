@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import QRCode from 'qrcode';
 import { prisma } from '../lib/prisma';
+import { env } from '../lib/env';
 import { authenticate, requireRole, ROLES } from '../middleware/auth';
 import { requireFeature } from '../lib/featureService';
 import { isZodError } from '../lib/validation';
@@ -382,6 +383,22 @@ router.get('/brochures/:id', authenticate, async (req, res) => {
   }
 });
 
+router.patch('/brochures/reorder', authenticate, async (req, res) => {
+  try {
+    const homeId = fhId(req);
+    if (!homeId) return res.status(400).json({ success: false, message: 'Funeral home ID required' });
+    const body = z.object({ order: z.array(z.object({ id: z.string(), displayOrder: z.number().int().min(0) })) }).parse(req.body);
+    await Promise.all(body.order.map((item) =>
+      prisma.brochure.updateMany({ where: { id: item.id, funeralHomeId: homeId }, data: { displayOrder: item.displayOrder } }),
+    ));
+    res.json({ success: true, data: null });
+  } catch (error) {
+    if (isZodError(error)) return res.status(400).json({ success: false, message: error.errors[0].message });
+    console.error('Reorder brochures error:', error);
+    res.status(500).json({ success: false, message: 'Failed to reorder brochures' });
+  }
+});
+
 router.patch('/brochures/:id', authenticate, async (req, res) => {
   try {
     const body = updateBrochureSchema.parse(req.body);
@@ -451,12 +468,21 @@ router.post('/brochures/:id/duplicate', authenticate, async (req, res) => {
         coverImageUrl: existing.coverImageUrl,
         description: existing.description,
         pdfUrl: existing.pdfUrl,
+        includedItems: existing.includedItems == null ? undefined : (existing.includedItems as string[]),
+        price: existing.price,
+        depositRequired: existing.depositRequired,
+        monthlyPaymentAvailable: existing.monthlyPaymentAvailable,
+        financeAvailable: existing.financeAvailable,
         ctaEnabled: existing.ctaEnabled,
+        ctaType: existing.ctaType,
         ctaText: existing.ctaText,
         ctaUrl: existing.ctaUrl,
         whatsappNumber: existing.whatsappNumber,
         phoneNumber: existing.phoneNumber,
         emailAddress: existing.emailAddress,
+        contactPerson: existing.contactPerson,
+        branchName: existing.branchName,
+        websiteUrl: existing.websiteUrl,
         seoTitle: existing.seoTitle,
         seoDescription: existing.seoDescription,
         published: false,
@@ -495,7 +521,7 @@ router.post('/brochures/:id/cover', authenticate, (req, res) => {
 });
 
 router.post('/brochures/:id/gallery', authenticate, (req, res) => {
-  upload.array('images', 20)(req, res, async (err) => {
+  upload.array('gallery', 20)(req, res, async (err) => {
     if (err) return res.status(400).json({ success: false, message: 'Upload failed' });
     const files = req.files as Express.Multer.File[];
     if (!files?.length) return res.status(400).json({ success: false, message: 'No files provided' });
@@ -517,7 +543,9 @@ router.post('/brochures/:id/gallery', authenticate, (req, res) => {
 
 router.delete('/brochures/:id/gallery/:galleryId', authenticate, async (req, res) => {
   try {
-    const item = await prisma.brochureGallery.findUnique({ where: { id: paramId(req).split('/').pop() || '' } });
+    const galleryId = Array.isArray(req.params.galleryId) ? req.params.galleryId[0] : req.params.galleryId;
+    if (!galleryId) return res.status(400).json({ success: false, message: 'Gallery item id required' });
+    const item = await prisma.brochureGallery.findUnique({ where: { id: galleryId } });
     if (!item) return res.status(404).json({ success: false, message: 'Gallery item not found' });
     const brochure = await prisma.brochure.findUnique({ where: { id: item.brochureId } });
     if (!brochure) return res.status(404).json({ success: false, message: 'Brochure not found' });
@@ -550,16 +578,18 @@ router.post('/brochures/:id/pdf', authenticate, (req, res) => {
   });
 });
 
-router.get('/brochures/:id/qr', authenticate, async (req, res) => {
+router.get('/brochures/:id/qr-code', authenticate, async (req, res) => {
   try {
     const existing = await prisma.brochure.findUnique({ where: { id: paramId(req) } });
     if (!existing) return res.status(404).json({ success: false, message: 'Brochure not found' });
     const homeId = fhId(req);
     if (homeId && existing.funeralHomeId !== homeId) return res.status(403).json({ success: false, message: 'Access denied' });
-    const baseUrl = req.headers.origin || `${req.protocol}://${req.get('host')}`;
-    const publicUrl = `${baseUrl}/services/${existing.slug}`;
+
+    const memorialOrigin = (env.MEMORIAL_URL || 'http://localhost:5174').replace(/\/$/, '');
+    const publicUrl = `${memorialOrigin}/services/${existing.slug}`;
+
     const qrDir = ensureMarketingDir('qr');
-    const qrFilename = `qr-${existing.slug}.png`;
+    const qrFilename = `qr-${existing.id}.png`;
     const qrPath = path.join(qrDir, qrFilename);
     await QRCode.toFile(qrPath, publicUrl, { width: 400, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
     const qrUrl = `/uploads/marketing/qr/${qrFilename}`;
@@ -573,22 +603,6 @@ router.get('/brochures/:id/qr', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Generate QR error:', error);
     res.status(500).json({ success: false, message: 'Failed to generate QR code' });
-  }
-});
-
-router.patch('/brochures/reorder', authenticate, async (req, res) => {
-  try {
-    const homeId = fhId(req);
-    if (!homeId) return res.status(400).json({ success: false, message: 'Funeral home ID required' });
-    const body = z.object({ order: z.array(z.object({ id: z.string(), displayOrder: z.number().int().min(0) })) }).parse(req.body);
-    await Promise.all(body.order.map((item) =>
-      prisma.brochure.updateMany({ where: { id: item.id, funeralHomeId: homeId }, data: { displayOrder: item.displayOrder } }),
-    ));
-    res.json({ success: true, data: null });
-  } catch (error) {
-    if (isZodError(error)) return res.status(400).json({ success: false, message: error.errors[0].message });
-    console.error('Reorder brochures error:', error);
-    res.status(500).json({ success: false, message: 'Failed to reorder brochures' });
   }
 });
 

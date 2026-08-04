@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireRole, ROLES } from '../middleware/auth';
 import { isZodError } from '../lib/validation';
-import { invalidateFeatureCache, getAllFeatureDefinitions, resolveFeatures, canAccess, FeatureResolution } from '../lib/featureService';
+import { invalidateFeatureCache, getAllFeatureDefinitions, resolveFeatures, canAccess, getFeatureVersion, FeatureResolution } from '../lib/featureService';
 import {
   createFeatureSchema, updateFeatureSchema, funeralHomeFeatureSchema, userFeatureSchema,
 } from '@memorialconnect/shared';
@@ -103,7 +103,7 @@ router.get('/', async (_req, res) => {
       dependencies: (depsByKey.get(f.key) ?? []).sort(),
       requiredBy: (requiredByMap.get(f.key) ?? []).sort(),
     }));
-    res.json({ success: true, data: { features: data, auditCount } });
+    res.json({ success: true, data: { features: data, auditCount, featureVersion: await getFeatureVersion() } });
   } catch (error) {
     console.error('List features error:', error);
     res.status(500).json({ success: false, error: 'Failed to load features' });
@@ -354,6 +354,7 @@ router.put('/funeral-homes/:id/features/:key', async (req, res) => {
         enabledAt: new Date(),
       },
     });
+    invalidateFeatureCache();
     await audit(
       { userId: req.user!.userId, name: (req as any).user?.name },
       body.enabled ? 'ENABLE' : 'DISABLE',
@@ -380,6 +381,7 @@ router.delete('/funeral-homes/:id/features/:key', async (req, res) => {
     });
     if (!existing) return res.status(404).json({ success: false, error: 'Override not found' });
     await prisma.funeralHomeFeature.delete({ where: { id: existing.id } });
+    invalidateFeatureCache();
     await audit(
       { userId: req.user!.userId, name: (req as any).user?.name },
       'REMOVE_OVERRIDE',
@@ -422,6 +424,7 @@ router.put('/users/:id/features/:key', async (req, res) => {
         enabledBy: req.user!.userId,
       },
     });
+    invalidateFeatureCache();
     await audit(
       { userId: req.user!.userId, name: (req as any).user?.name },
       body.enabled ? 'ENABLE' : 'DISABLE',
@@ -448,6 +451,7 @@ router.delete('/users/:id/features/:key', async (req, res) => {
     });
     if (!existing) return res.status(404).json({ success: false, error: 'Override not found' });
     await prisma.userFeature.delete({ where: { id: existing.id } });
+    invalidateFeatureCache();
     await audit(
       { userId: req.user!.userId, name: (req as any).user?.name },
       'REMOVE_OVERRIDE',

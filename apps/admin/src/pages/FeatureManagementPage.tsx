@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Activity, Building2, Copy, Eye, Flag, GitBranch, History, Link2, RefreshCw,
-  Search, SlidersHorizontal, ToggleLeft, Users,
+  Activity, Building2, Check, Copy, Eye, Flag, GitBranch, History, Link2, RefreshCw,
+  Search, ShoppingCart, SlidersHorizontal, ToggleLeft, Users,
 } from 'lucide-react';
 import {
   featureApi, FeatureWithOverrides, ResolvedFeature, FeatureAuditLogEntry,
@@ -72,6 +72,7 @@ function ChannelBadge({ channel }: { channel: string }) {
     QA: 'bg-amber-50 text-amber-700',
     INTERNAL: 'bg-slate-100 text-slate-600',
     DEPRECATED: 'bg-orange-50 text-orange-700',
+    ARCHIVED: 'bg-fuchsia-50 text-fuchsia-700',
     DISABLED: 'bg-red-50 text-red-700',
   };
   return <span className={`inline-flex px-2 py-1 text-xs font-semibold ${color[channel] ?? 'bg-slate-100 text-slate-600'}`}>{label(channel)}</span>;
@@ -86,8 +87,16 @@ function VisibilityBadge({ visibility }: { visibility: ResolvedFeature['visibili
   return <span className={`inline-flex px-2 py-1 text-xs font-semibold ${color[visibility]}`}>{label(visibility)}</span>;
 }
 
+const CATEGORY_ICONS: Record<string, React.ElementType> = {
+  MEMORIALS: Activity, VEHICLES: GitBranch, ASSETS: Building2, CASE_MANAGEMENT: Flag,
+  MARKETING: ShoppingCart, CRM: Users, INSURANCE: SlidersHorizontal, MEMBERSHIP: ToggleLeft,
+  REPORTS: Activity, STAFF: Users, PAYMENTS: ToggleLeft, API: SlidersHorizontal,
+  WHITE_LABEL: Eye, GENERAL: Flag,
+};
+
 const tabs = [
   { key: 'dashboard', label: 'Feature Dashboard', icon: Flag },
+  { key: 'marketplace', label: 'Feature Marketplace', icon: ShoppingCart },
   { key: 'rollout', label: 'Rollout Control', icon: SlidersHorizontal },
   { key: 'dependencies', label: 'Dependencies', icon: Link2 },
   { key: 'tester', label: 'Feature Tester', icon: Eye },
@@ -105,6 +114,7 @@ export default function FeatureManagementPage() {
   const [resolvedRows, setResolvedRows] = useState<ResolveRow[]>([]);
   const [auditLog, setAuditLog] = useState<FeatureAuditLogEntry[]>([]);
   const [auditCount, setAuditCount] = useState(0);
+  const [featureVersion, setFeatureVersion] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState('');
@@ -117,9 +127,12 @@ export default function FeatureManagementPage() {
       const [featureData, homeData] = await Promise.all([featureApi.getFeatures(), featureApi.getFuneralHomes()]);
       setFeatures(featureData.features);
       setAuditCount(featureData.auditCount);
+      if (featureData.featureVersion != null) setFeatureVersion(featureData.featureVersion);
       setHomes(homeData);
+      return featureData.featureVersion ?? null;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load feature data');
+      return null;
     } finally {
       setLoading(false);
     }
@@ -163,9 +176,9 @@ export default function FeatureManagementPage() {
     setError('');
     try {
       await featureApi.update(key, data);
-      await load();
+      const version = await load();
       await refreshFeatures();
-      flash(`Updated ${key}`);
+      flash(`Updated ${key}${version != null ? ` · feature version ${version}` : ''} — cache cleared, sessions pick it up on next poll/navigation`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Update failed');
     } finally {
@@ -247,6 +260,16 @@ export default function FeatureManagementPage() {
               <Stat label="Funeral home overrides" value={stats.overrides} icon={Users} />
             </section>
 
+            <section className="border border-ink/10 bg-white p-4 text-sm">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-muted">Propagation status</p>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                <span className="inline-flex items-center gap-1.5 text-emerald-700"><Check size={15} /> Backend updated</span>
+                <span className="inline-flex items-center gap-1.5 text-emerald-700"><Check size={15} /> Cache cleared</span>
+                <span className="inline-flex items-center gap-1.5 text-muted">Feature version <span className="font-mono font-semibold text-ink">{featureVersion ?? '—'}</span></span>
+                <span className="inline-flex items-center gap-1.5 text-muted">Sessions refresh on poll, navigation, focus, or online reconnect</span>
+              </div>
+            </section>
+
             <section>
               <h2 className="mb-3 text-sm font-semibold uppercase text-muted">Feature registry</h2>
               <div className="overflow-x-auto border border-ink/10 bg-white">
@@ -306,7 +329,15 @@ export default function FeatureManagementPage() {
           </>
         )}
 
-        {tab === 'rollout' && (
+         {tab === 'marketplace' && (
+           <MarketplaceTab
+             features={features}
+             saving={saving}
+             onUpdate={updateFeature}
+           />
+         )}
+
+         {tab === 'rollout' && (
           <section>
             <h2 className="mb-1 text-sm font-semibold uppercase text-muted">Rollout control</h2>
             <p className="mb-4 text-sm text-muted">Set the percentage of funeral homes that receive a feature. Percentages are sampled deterministically per home.</p>
@@ -464,6 +495,200 @@ export default function FeatureManagementPage() {
         )}
       </div>
     </>
+  );
+}
+
+function MarketplaceTab({
+  features,
+  saving,
+  onUpdate,
+}: {
+  features: FeatureWithOverrides[];
+  saving: string;
+  onUpdate: (key: string, data: Record<string, unknown>) => Promise<void>;
+}) {
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState<string>('ALL');
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return features.filter((f) => {
+      const matchesSearch = !term || f.name.toLowerCase().includes(term) || f.key.toLowerCase().includes(term) || (f.description ?? '').toLowerCase().includes(term);
+      const matchesCategory = category === 'ALL' || f.category === category;
+      return matchesSearch && matchesCategory;
+    });
+  }, [features, search, category]);
+
+  const categories = useMemo(
+    () => ['ALL', ...new Set(features.map((f) => f.category))],
+    [features],
+  );
+
+  const install = (f: FeatureWithOverrides) => {
+    if (f.enabledGlobally) return;
+    void onUpdate(f.key, { enabledGlobally: true });
+  };
+
+  const uninstall = (f: FeatureWithOverrides) => {
+    if (!f.enabledGlobally) return;
+    void onUpdate(f.key, { enabledGlobally: false });
+  };
+
+  const setLifecycle = (f: FeatureWithOverrides, next: string) => {
+    if (next === f.releaseChannel) return;
+    void onUpdate(f.key, { releaseChannel: next });
+  };
+
+  const setRollout = (f: FeatureWithOverrides, percent: number) => {
+    if (percent === f.rolloutPercent) return;
+    void onUpdate(f.key, { rolloutPercent: percent });
+  };
+
+  const lifecycleOptions = [
+    { value: 'INTERNAL', label: 'Internal' },
+    { value: 'QA', label: 'QA' },
+    { value: 'BETA', label: 'Beta' },
+    { value: 'EARLY_ACCESS', label: 'Early access' },
+    { value: 'GENERAL_AVAILABILITY', label: 'General availability' },
+    { value: 'DEPRECATED', label: 'Deprecated' },
+    { value: 'ARCHIVED', label: 'Archived' },
+    { value: 'DISABLED', label: 'Disabled' },
+  ];
+
+  return (
+    <section className="space-y-6">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="mb-1 text-sm font-semibold uppercase text-muted">Feature Marketplace</h2>
+          <p className="text-sm text-muted">Publish, promote, or retire platform features from this app-store catalog. Manage staged rollouts per feature.</p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted">Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="mt-1 block w-52 border border-ink/15 bg-white px-2 py-1.5 text-sm"
+            >
+              {categories.map((c) => <option key={c} value={c}>{c === 'ALL' ? 'All categories' : label(c)}</option>)}
+            </select>
+          </div>
+          <div className="relative w-64">
+            <Search size={16} className="absolute left-2 top-5 text-muted" />
+            <label className="text-xs font-semibold uppercase text-muted">Search</label>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search features..."
+              className="mt-1 block w-full border border-ink/15 bg-white pl-8 pr-2 py-1.5 text-sm"
+            />
+          </div>
+        </div>
+      </header>
+
+      <p className="text-xs text-muted">{filtered.length} feature{filtered.length === 1 ? '' : 's'} found</p>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {filtered.map((f) => {
+          const Icon = CATEGORY_ICONS[f.category] ?? Flag;
+          return (
+            <div key={f.key} className="border border-ink/10 bg-white">
+              <div className="flex items-start justify-between gap-3 border-b border-ink/10 bg-parchment/60 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center border border-ink/10 bg-white"><Icon size={20} className="text-sage" /></span>
+                  <div>
+                    <p className="font-display text-lg font-semibold text-ink">{f.name}</p>
+                    <p className="text-xs text-muted">{f.key} · {label(f.category)}</p>
+                  </div>
+                </div>
+                <ChannelBadge channel={f.releaseChannel} />
+              </div>
+
+              <div className="p-4">
+                {f.description && <p className="mb-4 text-sm text-muted">{f.description}</p>}
+
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  {f.premium && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-amber-50 text-amber-700">
+                      <SlidersHorizontal size={12} /> Premium
+                    </span>
+                  )}
+                  {f.minimumEdition && <span className="inline-flex px-2 py-1 text-xs font-semibold bg-slate-100 text-slate-600">Requires {label(f.minimumEdition)}</span>}
+                  {f.minimumPlan && <span className="inline-flex px-2 py-1 text-xs font-semibold bg-slate-100 text-slate-600">Plan: {label(f.minimumPlan)}</span>}
+                  {f.dependencies.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-slate-100 text-slate-600">
+                      <Link2 size={12} /> {f.dependencies.length} req
+                    </span>
+                  )}
+                </div>
+
+                <div className="mb-4">
+                  <label className="text-xs font-semibold uppercase text-muted">Lifecycle</label>
+                  <select
+                    value={f.releaseChannel}
+                    onChange={(e) => setLifecycle(f, e.target.value)}
+                    disabled={saving === f.key}
+                    className="mt-1 block w-full border border-ink/15 bg-white px-2 py-1.5 text-sm"
+                  >
+                    {lifecycleOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  </select>
+                </div>
+
+                <div className="mb-4">
+                  <label className="flex justify-between text-xs font-semibold uppercase text-muted">
+                    <span>Staged rollout</span>
+                    <span className="text-ink">{f.rolloutPercent}% of homes</span>
+                  </label>
+                  <div className="mt-2 flex flex-wrap items-center gap-1">
+                    {ROLLOUT_PERCENTS.map((percent) => (
+                      <button
+                        key={percent}
+                        type="button"
+                        onClick={() => setRollout(f, percent)}
+                        disabled={saving === f.key || f.rolloutPercent === percent}
+                        className={`px-2.5 py-1 text-xs font-semibold transition ${
+                          f.rolloutPercent === percent
+                            ? 'bg-sage text-white'
+                            : 'border border-ink/15 bg-white text-ink hover:bg-parchment'
+                        }`}
+                      >
+                        {percent}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-ink/10 pt-3">
+                  {f.enabledGlobally ? (
+                    <button
+                      type="button"
+                      onClick={() => uninstall(f)}
+                      disabled={saving === f.key}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50"
+                    >
+                      {saving === f.key ? <RefreshCw size={12} className="animate-spin" /> : <ToggleLeft size={14} />} Installed
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => install(f)}
+                      disabled={saving === f.key}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-ink/15 bg-white text-ink transition hover:bg-parchment disabled:opacity-50"
+                    >
+                      {saving === f.key ? <RefreshCw size={12} className="animate-spin" /> : <ShoppingCart size={14} />} Install
+                    </button>
+                  )}
+                  <span className="text-[11px] font-semibold text-muted">{f.funeralHomeOverrides.length} home override{f.funeralHomeOverrides.length === 1 ? '' : 's'}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {!filtered.length && (
+          <p className="text-sm text-muted">No features match your filters.</p>
+        )}
+      </div>
+    </section>
   );
 }
 

@@ -223,15 +223,21 @@ router.get('/me', authenticate, async (req, res) => {
 
 router.get('/my-features', authenticate, async (req, res) => {
   try {
+    const { resolveFeatures, getFeatureVersion } = await import('../lib/featureService');
+    const version = await getFeatureVersion();
+    const ifNoneMatch = req.header('If-None-Match');
+    if (ifNoneMatch && ifNoneMatch === String(version)) {
+      return res.status(304).end();
+    }
     const funeralHome = req.user!.funeralHomeId
       ? await prisma.funeralHome.findUnique({
           where: { id: req.user!.funeralHomeId },
           select: { id: true, plan: true, edition: true },
         })
       : null;
-    const { resolveFeatures } = await import('../lib/featureService');
     const features = await resolveFeatures(req.user!, funeralHome);
-    res.json({ success: true, data: { features } });
+    res.setHeader('ETag', String(version));
+    res.json({ success: true, data: { featureVersion: version, features } });
   } catch (error) {
     console.error('Get my features error:', error);
     res.status(500).json({ success: false, error: 'Failed to load feature availability' });

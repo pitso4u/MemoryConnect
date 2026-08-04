@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, PublicMemorial, photoUrl } from '../lib/api';
 import { brandCssVariables, brandFromFuneralHome } from '../lib/brand';
 import {
-  BookOpen, MapPin, Image, MessageSquare, Heart, Navigation, ArrowRight, Star, Download,
+  BookOpen, MapPin, Image, MessageSquare, Heart, Navigation, ArrowRight, Star, Download, Share,
 } from 'lucide-react';
 import { getAdminUrl, getPublicUrl } from '../lib/config';
 import PhotoLightbox from '../components/gallery/PhotoLightbox';
@@ -199,6 +199,22 @@ export default function MemorialPage() {
     performer: displayName,
   } : null;
 
+  const trackQrScan = () => {
+    if (!slug) return;
+    try { void api.recordQrScan(slug, getVisitorId()); } catch { /* non-blocking */ }
+  };
+
+  const handleShare = () => {
+    if (!slug) return;
+    const data = { title: memorialTitle, text: `In loving memory of ${memorial.deceasedName}`, url: memorialUrl };
+    const record = () => { try { void api.recordShare(slug, getVisitorId()); } catch { /* non-blocking */ } };
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      void navigator.share(data).then(record).catch(() => undefined);
+    } else {
+      try { void navigator.clipboard.writeText(memorialUrl).then(record); } catch { /* ignore */ }
+    }
+  };
+
   return (
     <>
       <Helmet>
@@ -255,10 +271,20 @@ export default function MemorialPage() {
             <a
               href={photoUrl(memorial.qrPosterUrl)}
               download
+              onClick={trackQrScan}
               className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-[var(--brand-accent)]/40 px-4 py-1.5 text-xs font-semibold text-[var(--brand-accent)] transition hover:bg-[var(--brand-accent)]/10"
             >
               <Download size={13} /> Download QR Poster
             </a>
+          )}
+          {!memorial.isPreview && (
+            <button
+              type="button"
+              onClick={handleShare}
+              className="mb-6 ml-2 inline-flex items-center gap-1.5 rounded-full border border-[var(--brand-accent)]/40 px-4 py-1.5 text-xs font-semibold text-[var(--brand-accent)] transition hover:bg-[var(--brand-accent)]/10"
+            >
+              <Share size={13} /> Share Memorial
+            </button>
           )}
           <div className="mx-auto mb-7 h-44 w-44 overflow-hidden rounded-full border-2 border-[var(--brand-accent)]/40 bg-white/5 shadow-2xl shadow-black/30 sm:h-52 sm:w-52">
             {memorial.deceasedPhotoUrl ? (
