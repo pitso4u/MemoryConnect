@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { Prisma } from '../generated/prisma';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { funeralFeedbackSchema } from '@memorialconnect/shared';
 import { isZodError } from '../lib/validation';

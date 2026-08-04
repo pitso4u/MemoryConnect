@@ -1,6 +1,6 @@
 import { prisma } from './prisma';
 import { getPlatformSettings, type PlatformSettings } from './platformSettings';
-import type { Prisma } from '../generated/prisma';
+import type { Prisma } from '@prisma/client';
 
 export type PublishMode = 'TRIAL' | 'CREDITS' | 'PAY_AS_YOU_GO';
 

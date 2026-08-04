@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Router, Request } from 'express';
-import { Prisma } from '../generated/prisma';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { formatMemorial } from '../lib/utils';
 import { tributeSchema } from '@memorialconnect/shared';

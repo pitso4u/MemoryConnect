@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Prisma } from '../generated/prisma';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ensureUploadsDir } from '../lib/uploads';
 import {

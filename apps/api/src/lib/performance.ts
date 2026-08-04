@@ -1,4 +1,4 @@
-import { Prisma } from '../generated/prisma';
+import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 
 export const PERFORMANCE_DAY_MS = 24 * 60 * 60 * 1000;
