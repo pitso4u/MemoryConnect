@@ -13,6 +13,8 @@ import {
   NavSectionItem,
 } from '../lib/navigation';
 
+
+
 function isFamilyRole(role?: string) {
   return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
 }
@@ -44,7 +46,8 @@ export default function DashboardLayout() {
 
   const portalLabel = managing ? `Managing · ${managingHome?.name}` : platformOwner ? 'Platform Owner' : isFamilyRole(user?.role) ? 'Family Portal' : 'Admin Portal';
   const portalName = platformOwner ? 'Memory Connect' : brand.tradingName || brand.companyName;
-  const portalLogo = platformOwner ? '/brand/memory-connect-logo-horizontal.png' : brand.logoUrl;
+  
+const portalLogo = '/brand/memory-connect-logo-horizontal.png';
 
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
