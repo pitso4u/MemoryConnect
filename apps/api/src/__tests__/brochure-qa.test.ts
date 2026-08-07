@@ -187,7 +187,12 @@ describe('Digital Brochure QA - full lifecycle, storage & public page', () => {
     expect(pub.status).toBe(200);
     expect(pub.body.data.published).toBe(true);
 
-    const single = await request(app).get(`/api/v1/public/brochures/${brochureSlug}`);
+    // Legacy single-slug URL resolves to the canonical tenant path.
+    const legacy = await request(app).get(`/api/v1/public/brochures/${brochureSlug}`);
+    expect(legacy.status).toBe(200);
+    expect(legacy.body.data.canonicalPath).toBe(`/services/${homeSlug}/${brochureSlug}`);
+
+    const single = await request(app).get(`/api/v1/public/brochures/${homeSlug}/${brochureSlug}`);
     expect(single.status).toBe(200);
     expect(single.body.data.brochure.title).toBe('QA Premium Package');
     expect(single.body.data.brochure.description).toBeTruthy();
@@ -203,7 +208,7 @@ describe('Digital Brochure QA - full lifecycle, storage & public page', () => {
 
   it('records a public enquiry against the brochure', async () => {
     const res = await request(app)
-      .post(`/api/v1/public/brochures/${brochureSlug}/enquiry`)
+      .post(`/api/v1/public/brochures/${homeSlug}/${brochureSlug}/enquiry`)
       .send({ fullName: 'QA Visitor', phoneNumber: '0712345678', message: 'Please send pricing' });
     expect(res.status).toBe(201);
     expect(res.body.data.id).toBeTruthy();

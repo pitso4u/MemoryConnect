@@ -115,7 +115,7 @@ export default function FuneralHomeServicesPage() {
                 {brochures.map((brochure) => (
                   <Link
                     key={brochure.id}
-                    to={`/services/${brochure.slug}`}
+                    to={funeralHome.slug ? `/services/${funeralHome.slug}/${brochure.slug}` : `/services/${brochure.slug}`}
                     className="group rounded-xl border border-white/10 bg-white/5 overflow-hidden transition hover:border-[var(--brand-accent)]/40 hover:bg-white/10"
                   >
                     {brochure.coverImageUrl ? (

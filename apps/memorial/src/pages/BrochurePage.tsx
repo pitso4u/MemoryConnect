@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
@@ -63,7 +63,8 @@ function displayPrice(value?: string | null): string {
 }
 
 export default function BrochurePage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { fhSlug: routeFhSlug, slug } = useParams<{ fhSlug?: string; slug: string }>();
+  const navigate = useNavigate();
   const [data, setData] = useState<Awaited<ReturnType<typeof marketingApi.getBrochure>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -82,18 +83,28 @@ export default function BrochurePage() {
     if (!slug) return;
     setLoading(true);
     setError('');
-    marketingApi.getBrochure(slug)
-      .then((result) => {
-        setData(result);
-        marketingApi.trackAnalytics({
-          eventType: 'page_view',
-          brochureId: result.brochure.id,
-          visitorId: window.localStorage.getItem('mc_visitor_id') || undefined,
-        }).catch(() => {});
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load page'))
-      .finally(() => setLoading(false));
-  }, [slug]);
+    if (routeFhSlug) {
+      marketingApi.getBrochure(routeFhSlug, slug)
+        .then((result) => {
+          setData(result);
+          marketingApi.trackAnalytics({
+            eventType: 'page_view',
+            brochureId: result.brochure.id,
+            visitorId: window.localStorage.getItem('mc_visitor_id') || undefined,
+          }).catch(() => {});
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load page'))
+        .finally(() => setLoading(false));
+    } else {
+      // Legacy /services/{slug} link: resolve to the canonical tenant URL.
+      marketingApi.resolveLegacyBrochure(slug)
+        .then(({ canonicalPath }) => navigate(canonicalPath, { replace: true }))
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : 'Failed to load page');
+          setLoading(false);
+        });
+    }
+  }, [routeFhSlug, slug, navigate]);
 
   const handleEnquiry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,10 +113,10 @@ export default function BrochurePage() {
       setFormError('Name is required');
       return;
     }
-    if (!slug) return;
+    if (!slug || !routeFhSlug) return;
     setSubmitting(true);
     try {
-      await marketingApi.submitEnquiry(slug, formData);
+      await marketingApi.submitEnquiry(routeFhSlug, slug, formData);
       setSubmitted(true);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to submit');

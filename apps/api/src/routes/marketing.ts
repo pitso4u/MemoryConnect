@@ -343,7 +343,9 @@ router.post('/brochures', authenticate, async (req, res) => {
     if (!slug) return res.status(400).json({ success: false, message: 'Could not generate slug' });
     let uniqueSlug = slug;
     let counter = 1;
-    while (await prisma.brochure.findUnique({ where: { slug: uniqueSlug } })) {
+    // Slug uniqueness is scoped to the funeral home so two homes can safely
+    // share the same package slug.
+    while (await prisma.brochure.findFirst({ where: { funeralHomeId: homeId, slug: uniqueSlug } })) {
       uniqueSlug = `${slug}-${counter}`;
       counter++;
     }
@@ -406,6 +408,12 @@ router.patch('/brochures/:id', authenticate, async (req, res) => {
     if (!existing) return res.status(404).json({ success: false, message: 'Brochure not found' });
     const homeId = fhId(req);
     if (homeId && existing.funeralHomeId !== homeId) return res.status(403).json({ success: false, message: 'Access denied' });
+    if (body.slug && body.slug !== existing.slug) {
+      const dup = await prisma.brochure.findFirst({
+        where: { funeralHomeId: existing.funeralHomeId, slug: body.slug, id: { not: existing.id } },
+      });
+      if (dup) return res.status(409).json({ success: false, message: 'A brochure with this slug already exists in this funeral home' });
+    }
     const { gallery, ...brochureData } = body;
     const brochure = await prisma.brochure.update({
       where: { id: existing.id },
@@ -455,7 +463,7 @@ router.post('/brochures/:id/duplicate', authenticate, async (req, res) => {
     let slug = createSlug(`${existing.title}-copy`);
     let uniqueSlug = slug;
     let counter = 1;
-    while (await prisma.brochure.findUnique({ where: { slug: uniqueSlug } })) {
+    while (await prisma.brochure.findFirst({ where: { funeralHomeId: existing.funeralHomeId, slug: uniqueSlug } })) {
       uniqueSlug = `${slug}-${counter}`;
       counter++;
     }
@@ -580,13 +588,22 @@ router.post('/brochures/:id/pdf', authenticate, (req, res) => {
 
 router.get('/brochures/:id/qr-code', authenticate, async (req, res) => {
   try {
-    const existing = await prisma.brochure.findUnique({ where: { id: paramId(req) } });
+    const existing = await prisma.brochure.findUnique({
+      where: { id: paramId(req) },
+      include: { funeralHome: { select: { slug: true } } },
+    });
     if (!existing) return res.status(404).json({ success: false, message: 'Brochure not found' });
     const homeId = fhId(req);
     if (homeId && existing.funeralHomeId !== homeId) return res.status(403).json({ success: false, message: 'Access denied' });
 
     const memorialOrigin = (env.MEMORIAL_URL || 'http://localhost:5174').replace(/\/$/, '');
-    const publicUrl = `${memorialOrigin}/services/${existing.slug}`;
+    // Canonical URL is tenant-scoped: /services/{funeralHomeSlug}/{brochureSlug}.
+    // Homes without a slug fall back to the legacy /services/{slug} form, which
+    // still resolves via the legacy redirect.
+    const fhSlug = existing.funeralHome?.slug;
+    const publicUrl = fhSlug
+      ? `${memorialOrigin}/services/${fhSlug}/${existing.slug}`
+      : `${memorialOrigin}/services/${existing.slug}`;
 
     const qrDir = ensureMarketingDir('qr');
     const qrFilename = `qr-${existing.id}.png`;

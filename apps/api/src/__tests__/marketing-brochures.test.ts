@@ -13,6 +13,7 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 app.use('/api/v1/marketing', marketingRoutes);
 
 let homeId = '';
+let homeSlug = '';
 let adminToken = '';
 let brochureId = '';
 let gGalleryUrl = '';
@@ -58,6 +59,7 @@ beforeAll(async () => {
     data: {
       name: `Marketing Home ${suffix}`,
       email: `marketing-home-${suffix}@example.com`,
+      slug: `marketing-home-${suffix}`,
       plan: 'PROFESSIONAL',
       edition: 'FUNERAL_OFFICE',
       users: {
@@ -67,6 +69,7 @@ beforeAll(async () => {
     include: { users: true },
   });
   homeId = home.id;
+  homeSlug = home.slug as string;
   adminToken = signToken({ userId: home.users[0].id, funeralHomeId: home.id, role: 'FUNERAL_HOME_ADMIN' });
 });
 
@@ -181,8 +184,8 @@ describe('Digital Brochure upload flow', () => {
       .get(`/api/v1/marketing/brochures/${brochureId}/qr-code`)
       .set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
-    expect(res.body.data.publicUrl).toMatch(/^http:\/\/localhost:5174\/services\//);
-    expect(res.body.data.publicUrl).toContain('/services/');
+    // Canonical tenant-scoped URL: /services/{funeralHomeSlug}/{brochureSlug}
+    expect(res.body.data.publicUrl).toBe(`http://localhost:5174/services/${homeSlug}/test-brochure`);
     expect(res.body.data.qrCodeUrl).toMatch(/^\/uploads\/marketing\/qr\//);
   });
 });

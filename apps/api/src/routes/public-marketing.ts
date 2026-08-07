@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { isZodError } from '../lib/validation';
@@ -110,42 +110,45 @@ router.get('/funeral-homes/:slug/brochures', async (req, res) => {
   }
 });
 
-// ── Get single brochure page ──────────────────────────────────────────────
+// ── Get single brochure page (canonical, tenant-scoped) ───────────────────
+// Canonical URL is /services/{funeralHomeSlug}/{brochureSlug}. The funeral home
+// is resolved from its slug first (status ACTIVE), then the brochure is looked
+// up scoped to that funeral home. Only published brochures are exposed.
 
-router.get('/brochures/:slug', async (req, res) => {
+const publicBrochureFuneralHomeSelect = {
+  id: true, name: true, slug: true, tradingName: true, logoUrl: true, iconUrl: true,
+  phone: true, email: true, address: true, whatsapp: true, websiteUrl: true,
+  facebookUrl: true, instagramUrl: true, tiktokUrl: true,
+  primaryColor: true, secondaryColor: true, accentColor: true, backgroundColor: true,
+  textColor: true, fontFamily: true, buttonStyle: true, cardStyle: true, borderRadius: true,
+} as const;
+
+async function resolveBrochure(fhSlug: string | undefined, slug: string | undefined) {
+  if (!fhSlug || !slug) return null;
+  const funeralHome = await prisma.funeralHome.findFirst({
+    where: { slug: fhSlug, status: 'ACTIVE' },
+    select: publicBrochureFuneralHomeSelect,
+  });
+  if (!funeralHome) return null;
+  const brochure = await prisma.brochure.findFirst({
+    where: { funeralHomeId: funeralHome.id, slug },
+    include: { category: true, gallery: { orderBy: { displayOrder: 'asc' } } },
+  });
+  if (!brochure || !brochure.published) return null;
+  return { funeralHome, brochure };
+}
+
+router.get('/brochures/:fhSlug/:slug', async (req, res) => {
   try {
-    const slug = queryValue(req.params.slug);
-    if (!slug) return res.status(400).json({ success: false, message: 'Invalid slug' });
-
-    const brochure = await prisma.brochure.findUnique({
-      where: { slug },
-      include: { category: true, gallery: { orderBy: { displayOrder: 'asc' } } },
-    });
-
-    if (!brochure || !brochure.published) return res.status(404).json({ success: false, message: 'Brochure not found' });
-
-    const funeralHome = await prisma.funeralHome.findUnique({
-      where: { id: brochure.funeralHomeId },
-      select: {
-        id: true, name: true, slug: true, tradingName: true, logoUrl: true, iconUrl: true,
-        phone: true, email: true, address: true, whatsapp: true, websiteUrl: true,
-        facebookUrl: true, instagramUrl: true, tiktokUrl: true,
-        primaryColor: true, secondaryColor: true, accentColor: true, backgroundColor: true,
-        textColor: true, fontFamily: true, buttonStyle: true, cardStyle: true, borderRadius: true,
-      },
-    });
-
-    const contact = await prisma.marketingContact.findUnique({ where: { funeralHomeId: brochure.funeralHomeId } });
-
-    const brand = brandFromFuneralHome(funeralHome as any);
-    const viewCount = brochure.viewCount;
-
+    const resolved = await resolveBrochure(queryValue(req.params.fhSlug), queryValue(req.params.slug));
+    if (!resolved) return res.status(404).json({ success: false, message: 'Brochure not found' });
+    const brand = brandFromFuneralHome(resolved.funeralHome as any);
     res.json({
       success: true,
       data: {
-        brochure: { ...brochure, viewCount },
-        funeralHome: funeralHome ? { ...funeralHome, brand } : null,
-        contact,
+        brochure: { ...resolved.brochure, viewCount: resolved.brochure.viewCount },
+        funeralHome: { ...resolved.funeralHome, brand },
+        contact: await prisma.marketingContact.findUnique({ where: { funeralHomeId: resolved.brochure.funeralHomeId } }),
       },
     });
   } catch (error) {
@@ -154,47 +157,88 @@ router.get('/brochures/:slug', async (req, res) => {
   }
 });
 
+// ── Legacy single-brochure redirect (backwards compatibility) ─────────────
+// Old URLs are /services/{slug}. When the slug resolves to exactly one
+// published brochure, return its canonical path so existing links and printed
+// QR codes redirect to the tenant-scoped URL. Ambiguous slugs are not
+// auto-resolved.
+
+router.get('/brochures/:slug', async (req, res) => {
+  try {
+    const slug = queryValue(req.params.slug);
+    if (!slug) return res.status(400).json({ success: false, message: 'Invalid slug' });
+    const matches = await prisma.brochure.findMany({
+      where: { slug, published: true },
+      select: { funeralHome: { select: { slug: true } } },
+    });
+    const fhSlugs = matches.map((m) => m.funeralHome?.slug).filter((s): s is string => Boolean(s));
+    if (fhSlugs.length === 0) return res.status(404).json({ success: false, message: 'Brochure not found' });
+    if (fhSlugs.length > 1) {
+      return res.status(409).json({ success: false, message: 'This brochure link is ambiguous and could not be resolved automatically.' });
+    }
+    res.json({ success: true, data: { canonicalPath: `/services/${fhSlugs[0]}/${slug}` } });
+  } catch (error) {
+    console.error('Resolve legacy brochure error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load brochure' });
+  }
+});
+
 // ── Submit brochure enquiry ───────────────────────────────────────────────
 
+async function createEnquiryForBrochure(brochure: { id: string; funeralHomeId: string }, req: Request, res: any) {
+  const body = enquirySchema.parse(req.body);
+  const enquiry = await prisma.enquiry.create({
+    data: {
+      brochureId: brochure.id,
+      funeralHomeId: brochure.funeralHomeId,
+      fullName: body.fullName,
+      phoneNumber: body.phoneNumber ?? null,
+      emailAddress: body.emailAddress ?? null,
+      message: body.message ?? null,
+    },
+  });
+
+  // Track enquiry event
+  try {
+    const userAgent = req.get('user-agent')?.slice(0, 500) || null;
+    await prisma.analyticsEvent.create({
+      data: {
+        funeralHomeId: brochure.funeralHomeId,
+        brochureId: brochure.id,
+        eventType: 'enquiry',
+        visitorId: null,
+        ipHash: ipHash(req.ip),
+        userAgent,
+      },
+    });
+  } catch { /* analytics non-blocking */ }
+
+  res.status(201).json({ success: true, data: { id: enquiry.id } });
+}
+
+router.post('/brochures/:fhSlug/:slug/enquiry', async (req, res) => {
+  try {
+    const resolved = await resolveBrochure(queryValue(req.params.fhSlug), queryValue(req.params.slug));
+    if (!resolved) return res.status(404).json({ success: false, message: 'Brochure not found' });
+    return createEnquiryForBrochure(resolved.brochure, req, res);
+  } catch (error) {
+    if (isZodError(error)) return res.status(400).json({ success: false, message: error.errors[0].message });
+    console.error('Submit enquiry error:', error);
+    res.status(500).json({ success: false, message: 'Failed to submit enquiry' });
+  }
+});
+
+// Legacy enquiry endpoint: resolves a single unambiguous slug so old links keep working.
 router.post('/brochures/:slug/enquiry', async (req, res) => {
   try {
     const slug = queryValue(req.params.slug);
     if (!slug) return res.status(400).json({ success: false, message: 'Invalid slug' });
-
-    const brochure = await prisma.brochure.findUnique({
-      where: { slug },
-      select: { id: true, funeralHomeId: true, title: true },
+    const matches = await prisma.brochure.findMany({
+      where: { slug, published: true },
+      select: { id: true, funeralHomeId: true },
     });
-    if (!brochure || !brochure.id) return res.status(404).json({ success: false, message: 'Brochure not found' });
-
-    const body = enquirySchema.parse(req.body);
-    const enquiry = await prisma.enquiry.create({
-      data: {
-        brochureId: brochure.id,
-        funeralHomeId: brochure.funeralHomeId,
-        fullName: body.fullName,
-        phoneNumber: body.phoneNumber ?? null,
-        emailAddress: body.emailAddress ?? null,
-        message: body.message ?? null,
-      },
-    });
-
-    // Track enquiry event
-    try {
-      const userAgent = req.get('user-agent')?.slice(0, 500) || null;
-      await prisma.analyticsEvent.create({
-        data: {
-          funeralHomeId: brochure.funeralHomeId,
-          brochureId: brochure.id,
-          eventType: 'enquiry',
-          visitorId: null,
-          ipHash: ipHash(req.ip),
-          userAgent,
-        },
-      });
-    } catch { /* analytics non-blocking */ }
-
-    res.status(201).json({ success: true, data: { id: enquiry.id } });
+    if (matches.length !== 1) return res.status(404).json({ success: false, message: 'Brochure not found' });
+    return createEnquiryForBrochure(matches[0], req, res);
   } catch (error) {
     if (isZodError(error)) return res.status(400).json({ success: false, message: error.errors[0].message });
     console.error('Submit enquiry error:', error);

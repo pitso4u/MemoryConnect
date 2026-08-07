@@ -268,11 +268,15 @@ export const marketingApi = {
   getFuneralHomePage: (slug: string) =>
     request<FuneralHomeMarketingPage>(`/api/v1/public/funeral-homes/${encodeURIComponent(slug)}`),
 
-  getBrochure: (slug: string) =>
-    request<BrochureDetailPage>(`/api/v1/public/brochures/${encodeURIComponent(slug)}`),
+  getBrochure: (fhSlug: string, slug: string) =>
+    request<BrochureDetailPage>(`/api/v1/public/brochures/${encodeURIComponent(fhSlug)}/${encodeURIComponent(slug)}`),
 
-  submitEnquiry: (slug: string, data: { fullName: string; phoneNumber?: string | null; emailAddress?: string | null; message?: string | null }) =>
-    request<{ id: string }>(`/api/v1/public/brochures/${encodeURIComponent(slug)}/enquiry`, {
+  /** Legacy /services/{slug} link: resolves to the canonical path or throws. */
+  resolveLegacyBrochure: (slug: string) =>
+    request<{ canonicalPath: string }>(`/api/v1/public/brochures/${encodeURIComponent(slug)}`),
+
+  submitEnquiry: (fhSlug: string, slug: string, data: { fullName: string; phoneNumber?: string | null; emailAddress?: string | null; message?: string | null }) =>
+    request<{ id: string }>(`/api/v1/public/brochures/${encodeURIComponent(fhSlug)}/${encodeURIComponent(slug)}/enquiry`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),

@@ -592,7 +592,7 @@ model Brochure {
   categoryId      String?
   category        BrochureCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   title           String
-  slug            String      @unique
+  slug            String
   coverImageUrl   String?
   description     String?
   pdfUrl          String?
@@ -625,6 +625,7 @@ model Brochure {
   qrCodes         QRCode[]
   analyticsEvents AnalyticsEvent[]
 
+  @@unique([funeralHomeId, slug])
   @@index([funeralHomeId])
   @@index([categoryId])
   @@index([published, displayOrder])
