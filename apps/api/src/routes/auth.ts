@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { prisma } from '../lib/prisma';
+import { authLimiter } from '../middleware/authRateLimit';
 import { authenticate, canManageFuneralHome, isFuneralHomeRole, normalizeRole, ROLES, signToken } from '../middleware/auth';
 import { registerSchema, loginSchema } from '@memorialconnect/shared';
 import { brandFromFuneralHome } from '@memorialconnect/shared';
@@ -69,7 +70,7 @@ async function trialForNewHome() {
   };
 }
 
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   try {
     const body = registerSchema.parse(req.body);
     const existing = await prisma.user.findUnique({ where: { email: body.email } });
@@ -134,7 +135,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   try {
     const body = loginSchema.parse(req.body);
     const user = await prisma.user.findUnique({
@@ -150,6 +151,40 @@ router.post('/login', async (req, res) => {
       await prisma.loginAttempt.create({ data: { email: body.email.toLowerCase(), success: false } });
       return res.status(403).json({ success: false, error: 'This funeral home account has been suspended. Please contact Memory Connect support.' });
     }
+
+    const userPublic = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: normalizeRole(user.role),
+      funeralHomeId: user.funeralHomeId,
+    };
+
+    // Credentials are valid but this session must complete the forced password
+    // change before the rest of the app is reachable. Issue a restricted token
+    // that is only accepted by the change-password endpoint.
+    if (user.mustChangePassword) {
+      const expired = !user.temporaryPasswordExpiresAt || user.temporaryPasswordExpiresAt.getTime() <= Date.now();
+      if (expired) {
+        await prisma.loginAttempt.create({ data: { email: body.email.toLowerCase(), success: false } });
+        return res.status(403).json({
+          success: false,
+          error: 'Your temporary password has expired. Please use the reset password flow.',
+          code: 'TEMP_PASSWORD_EXPIRED',
+        });
+      }
+      await prisma.loginAttempt.create({ data: { email: body.email.toLowerCase(), success: true } });
+      await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+      const token = signToken(
+        { userId: user.id, funeralHomeId: user.funeralHomeId, role: normalizeRole(user.role), tokenVersion: user.tokenVersion, scope: 'password_change' },
+        { expiresIn: '30m' },
+      );
+      return res.json({
+        success: true,
+        data: { accessToken: token, requiresPasswordChange: true, user: userPublic },
+      });
+    }
+
     await prisma.loginAttempt.create({ data: { email: body.email.toLowerCase(), success: true } });
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
@@ -157,12 +192,70 @@ router.post('/login', async (req, res) => {
       userId: user.id,
       funeralHomeId: user.funeralHomeId,
       role: normalizeRole(user.role),
+      tokenVersion: user.tokenVersion,
     });
 
     res.json({
       success: true,
       data: {
         accessToken: token,
+        requiresPasswordChange: false,
+        user: userPublic,
+      },
+    });
+  } catch (err) {
+    if (isZodError(err)) {
+      return res.status(400).json({ success: false, error: err.errors[0].message });
+    }
+    console.error('Login error:', err);
+    res.status(500).json({ success: false, error: 'Login failed' });
+  }
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters'),
+});
+
+router.post('/change-password', authenticate, async (req, res) => {
+  try {
+    const body = changePasswordSchema.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+    if (!user) return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    if (user.mustChangePassword) {
+      const expired = !user.temporaryPasswordExpiresAt || user.temporaryPasswordExpiresAt.getTime() <= Date.now();
+      if (expired) {
+        return res.status(403).json({
+          success: false,
+          error: 'Your temporary password has expired. Please use the reset password flow.',
+          code: 'TEMP_PASSWORD_EXPIRED',
+        });
+      }
+    }
+    if (!(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
+      return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+    }
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await bcrypt.hash(body.newPassword, 12),
+        passwordSetAt: new Date(),
+        mustChangePassword: false,
+        temporaryPasswordExpiresAt: null,
+        tokenVersion: { increment: 1 },
+      },
+    });
+    const token = signToken({
+      userId: user.id,
+      funeralHomeId: user.funeralHomeId,
+      role: normalizeRole(user.role),
+      tokenVersion: updated.tokenVersion,
+    });
+    res.json({
+      success: true,
+      data: {
+        accessToken: token,
+        requiresPasswordChange: false,
         user: {
           id: user.id,
           email: user.email,
@@ -173,11 +266,9 @@ router.post('/login', async (req, res) => {
       },
     });
   } catch (err) {
-    if (isZodError(err)) {
-      return res.status(400).json({ success: false, error: err.errors[0].message });
-    }
-    console.error('Login error:', err);
-    res.status(500).json({ success: false, error: 'Login failed' });
+    if (isZodError(err)) return res.status(400).json({ success: false, error: err.errors[0].message });
+    console.error('Change password error:', err);
+    res.status(500).json({ success: false, error: 'Failed to change password' });
   }
 });
 

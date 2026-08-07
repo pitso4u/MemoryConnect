@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import DashboardLayout from './components/DashboardLayout';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import MemorialsPage from './pages/MemorialsPage';
 import CreateMemorialPage from './pages/CreateMemorialPage';
 import MemorialDetailPage from './pages/MemorialDetailPage';
@@ -35,20 +36,22 @@ function isFamilyRole(role?: string) {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { token, isLoading } = useAuth();
+  const { token, isLoading, needsPasswordChange } = useAuth();
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-muted">Loading...</div>;
   if (!token) return <Navigate to="/login" replace />;
+  if (needsPasswordChange) return <Navigate to="/change-password" replace />;
   return <>{children}</>;
 }
 
 function RoleRedirect() {
-  const { user } = useAuth();
-  return <Navigate to={user?.role === 'SUPER_ADMIN' ? '/admin-owner' : isFamilyRole(user?.role) ? '/family' : '/dashboard'} replace />;
+  const { user, managingHome } = useAuth();
+  return <Navigate to={user?.role === 'SUPER_ADMIN' ? (managingHome ? '/dashboard' : '/admin-owner') : isFamilyRole(user?.role) ? '/family' : '/dashboard'} replace />;
 }
 
 function FuneralHomeOnly({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  if (user?.role === 'SUPER_ADMIN') return <Navigate to="/admin-owner" replace />;
+  const { user, managingHome } = useAuth();
+  // A SUPER_ADMIN managing a funeral home may use the owner portal for that home.
+  if (user?.role === 'SUPER_ADMIN' && !managingHome) return <Navigate to="/admin-owner" replace />;
   if (isFamilyRole(user?.role)) return <Navigate to="/family" replace />;
   return <>{children}</>;
 }
@@ -77,6 +80,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/change-password" element={<ChangePasswordPage />} />
       <Route path="/family/invite/:token" element={<FamilyInvitePage />} />
       <Route
         path="/"

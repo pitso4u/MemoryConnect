@@ -1,4 +1,5 @@
 import { getApiUrl } from './config';
+import { getManageTargetId } from './manageContext';
 import type {
   Memorial,
   ProgrammeItem,
@@ -34,13 +35,29 @@ function getToken(): string | null {
   return localStorage.getItem('mc_token');
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+/**
+ * Headers that accompany the current management context. When a SUPER_ADMIN is
+ * managing a funeral home, every API call is scoped to that home server-side;
+ * without a target (or for any other role) nothing is added.
+ */
+function managementHeaders(): Record<string, string> {
+  const managingId = getManageTargetId();
+  return managingId ? { 'X-Managing-Funeral-Home': managingId } : {};
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { ...managementHeaders(), ...extra };
   const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...authHeaders(),
     ...(options.headers as Record<string, string>),
   };
-  if (token) headers.Authorization = `Bearer ${token}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
@@ -76,9 +93,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   login: (email: string, password: string) =>
-    request<{ accessToken: string; user: AuthUser }>(
+    request<{ accessToken: string; user: AuthUser; requiresPasswordChange?: boolean }>(
       '/api/v1/auth/login',
       { method: 'POST', body: JSON.stringify({ email, password }) }
+    ),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ accessToken: string; user: AuthUser }>(
+      '/api/v1/auth/change-password',
+      { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }
     ),
 
   register: (data: { funeralHomeName: string; name: string; email: string; password: string }) =>
@@ -93,7 +116,6 @@ export const api = {
     request<FuneralHomeProfile>('/api/v1/auth/funeral-home-profile', { method: 'PATCH', body: JSON.stringify(data) }),
 
   uploadFuneralHomeLogo: async (file: File) => {
-    const token = getToken();
     const form = new FormData();
     form.append('logo', file);
 
@@ -103,7 +125,7 @@ export const api = {
     try {
       const res = await fetch(`${API_URL}/api/v1/auth/funeral-home-logo`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });
@@ -145,7 +167,6 @@ export const api = {
     request<{ filesDeleted: number; bytesDeleted: number }>(`/api/v1/memorials/${id}`, { method: 'DELETE' }),
 
   uploadLogo: async (memorialId: string, file: File) => {
-    const token = getToken();
     const form = new FormData();
     form.append('logo', file);
 
@@ -155,7 +176,7 @@ export const api = {
     try {
       const res = await fetch(`${API_URL}/api/v1/memorials/${memorialId}/logo`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });
@@ -217,7 +238,6 @@ export const api = {
     request<MemorialDetail>(`/api/v1/memorials/${id}/programme/previous`, { method: 'POST' }),
 
   uploadPhotos: async (memorialId: string, files: FileList, category: string, caption?: string) => {
-    const token = getToken();
     const form = new FormData();
     Array.from(files).forEach((file) => form.append('photos', file));
     form.append('category', category);
@@ -229,7 +249,7 @@ export const api = {
     try {
       const res = await fetch(`${API_URL}/api/v1/memorials/${memorialId}/photos`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });
@@ -300,6 +320,8 @@ export const api = {
   reactivatePlatformFuneralHome: (id: string) => request(`/api/v1/platform/funeral-homes/${id}/reactivate`, { method: 'POST' }),
   sendPlatformPasswordReset: (id: string) =>
     request<{ resetUrl: string; email: string; expiresAt: string }>(`/api/v1/platform/users/${id}/send-password-reset`, { method: 'POST' }),
+  generatePlatformTempPassword: (id: string) =>
+    request<{ tempPassword: string; email: string; expiresAt: string }>(`/api/v1/platform/users/${id}/generate-temp-password`, { method: 'POST' }),
   resendPlatformInvite: (id: string) =>
     request<FamilyInvitation>(`/api/v1/platform/invites/${id}/resend`, { method: 'POST' }),
   verifyPlatformPayment: (id: string) =>
@@ -350,7 +372,6 @@ export const api = {
     request<MarketingContact>('/api/v1/marketing/contact', { method: 'PUT', body: JSON.stringify(data) }),
 
   uploadMarketingContactLogo: async (file: File) => {
-    const token = getToken();
     const form = new FormData();
     form.append('logo', file);
 
@@ -360,7 +381,7 @@ export const api = {
     try {
       const res = await fetch(`${API_URL}/api/v1/marketing/contact/logo`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });
@@ -380,7 +401,6 @@ export const api = {
   },
 
   uploadMarketingContactCover: async (file: File) => {
-    const token = getToken();
     const form = new FormData();
     form.append('cover', file);
 
@@ -390,7 +410,7 @@ export const api = {
     try {
       const res = await fetch(`${API_URL}/api/v1/marketing/contact/cover`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });
@@ -440,7 +460,6 @@ export const api = {
     request<Brochure>(`/api/v1/marketing/brochures/${id}/duplicate`, { method: 'POST' }),
 
   uploadBrochureCover: async (id: string, file: File) => {
-    const token = getToken();
     const form = new FormData();
     form.append('cover', file);
 
@@ -450,7 +469,7 @@ export const api = {
     try {
       const res = await fetch(`${API_URL}/api/v1/marketing/brochures/${id}/cover`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });
@@ -470,7 +489,6 @@ export const api = {
   },
 
   uploadBrochureGallery: async (id: string, files: FileList) => {
-    const token = getToken();
     const form = new FormData();
     Array.from(files).forEach((file) => form.append('gallery', file));
 
@@ -480,7 +498,7 @@ export const api = {
     try {
       const res = await fetch(`${API_URL}/api/v1/marketing/brochures/${id}/gallery`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });
@@ -503,7 +521,6 @@ export const api = {
     request<void>(`/api/v1/marketing/brochures/${id}/gallery/${galleryId}`, { method: 'DELETE' }),
 
   uploadBrochurePdf: async (id: string, file: File) => {
-    const token = getToken();
     const form = new FormData();
     form.append('pdf', file);
 
@@ -513,7 +530,7 @@ export const api = {
     try {
       const res = await fetch(`${API_URL}/api/v1/marketing/brochures/${id}/pdf`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });
@@ -554,7 +571,6 @@ export const api = {
     request<void>(`/api/v1/marketing/promotions/${id}`, { method: 'DELETE' }),
 
   uploadPromotionBanner: async (id: string, file: File) => {
-    const token = getToken();
     const form = new FormData();
     form.append('banner', file);
 
@@ -564,7 +580,7 @@ export const api = {
     try {
       const res = await fetch(`${API_URL}/api/v1/marketing/promotions/${id}/banner`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });
@@ -1434,14 +1450,13 @@ export const featureApi = {
 };
 
 function apiUpload<T>(url: string, form: FormData): Promise<T> {
-  const token = getToken();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   return (async () => {
     try {
       const res = await fetch(`${API_URL}${url}`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: authHeaders(),
         body: form,
         signal: controller.signal,
       });

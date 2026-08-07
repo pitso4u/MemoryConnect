@@ -126,6 +126,13 @@ model User {
   featureOverrides UserFeature[]
   passwordSetAt DateTime?
   lastLoginAt   DateTime?
+  // Temporary credentials issued by the platform owner. While true, the user
+  // must set a new password before the rest of the app is usable.
+  mustChangePassword        Boolean   @default(false)
+  temporaryPasswordExpiresAt DateTime?
+  // Bumped whenever a session must be revoked (e.g. temp password issued or a
+  // password changed) so previously signed JWTs stop being accepted.
+  tokenVersion              Int       @default(0)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 }

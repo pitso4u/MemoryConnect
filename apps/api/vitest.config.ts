@@ -9,6 +9,7 @@ export default defineConfig({
       JWT_SECRET: 'test-secret-at-least-sixteen-characters',
       PAYSTACK_SECRET_KEY: 'sk_test_memory_connect',
       ADMIN_URL: 'http://localhost:5173',
+      AUTH_RATE_LIMIT_MAX: '5',
     },
   },
 });

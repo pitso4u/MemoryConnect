@@ -18,12 +18,15 @@ function isFamilyRole(role?: string) {
 }
 
 export default function DashboardLayout() {
-  const { user, logout, hasFeature, refreshFeatures } = useAuth();
+  const { user, logout, hasFeature, refreshFeatures, managingHome, stopManagingHome } = useAuth();
   const { brand } = useBrand();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const platformOwner = user?.role === 'SUPER_ADMIN';
+  // A platform owner stops being "platform owner" in the UI while they are
+  // managing a funeral home: they see the owner portal for that home instead.
+  const managing = Boolean(managingHome);
+  const platformOwner = user?.role === 'SUPER_ADMIN' && !managing;
   const baseNavigation = platformOwner ? platformNavigation : isFamilyRole(user?.role) ? familyNavigation : funeralHomeNavigation;
 
   const navigation = useMemo(
@@ -39,7 +42,7 @@ export default function DashboardLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  const portalLabel = platformOwner ? 'Platform Owner' : isFamilyRole(user?.role) ? 'Family Portal' : 'Admin Portal';
+  const portalLabel = managing ? `Managing · ${managingHome?.name}` : platformOwner ? 'Platform Owner' : isFamilyRole(user?.role) ? 'Family Portal' : 'Admin Portal';
   const portalName = platformOwner ? 'Memory Connect' : brand.tradingName || brand.companyName;
   const portalLogo = platformOwner ? '/brand/memory-connect-logo-horizontal.png' : brand.logoUrl;
 
@@ -64,6 +67,11 @@ export default function DashboardLayout() {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleExitManage = () => {
+    stopManagingHome();
+    navigate('/admin-owner/funeral-homes');
   };
 
   const renderLink = (item: NavLinkItem) => {
@@ -176,6 +184,23 @@ export default function DashboardLayout() {
       </aside>
 
       <main className="min-w-0 flex-1 overflow-x-hidden">
+        {managing && (
+          <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+            <p className="flex flex-wrap items-center gap-1.5">
+              <span className="font-semibold">SUPER_ADMIN · {user?.name}</span>
+              <span className="text-amber-700">is managing</span>
+              <span className="font-semibold">{managingHome?.name}</span>
+              <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">Manage mode</span>
+            </p>
+            <button
+              type="button"
+              onClick={handleExitManage}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-semibold text-amber-900 transition hover:bg-amber-100"
+            >
+              Exit manage mode
+            </button>
+          </div>
+        )}
         {platformOwner && <OwnerTopbar />}
         <Outlet />
       </main>

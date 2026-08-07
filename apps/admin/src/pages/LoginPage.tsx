@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, setPendingPasswordChange } = useAuth();
   const { brand } = useBrand();
   const navigate = useNavigate();
   const defaultLogo = !brand.whiteLabelEnabled && !brand.logoUrl ? '/brand/memory-connect-logo-horizontal.png' : null;
@@ -24,6 +24,11 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const data = await api.login(email, password);
+      if (data.requiresPasswordChange) {
+        setPendingPasswordChange(data.accessToken, data.user);
+        navigate('/change-password');
+        return;
+      }
       login(data.accessToken, data.user);
       navigate(data.user.role === 'SUPER_ADMIN' ? '/admin-owner' : isFamilyRole(data.user.role) ? '/family' : '/dashboard');
     } catch (err) {

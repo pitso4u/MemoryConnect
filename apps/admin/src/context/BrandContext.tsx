@@ -3,7 +3,6 @@ import type { BrandProfile } from '@memorialconnect/shared';
 import { brandCssVariables, brandFromFuneralHome, DEFAULT_BRAND_PROFILE } from '../lib/brand';
 import { api } from '../lib/api';
 import { useAuth } from './AuthContext';
-
 interface BrandContextType {
   brand: BrandProfile;
   setPreviewBrand: (brand: BrandProfile) => void;
@@ -27,7 +26,7 @@ function applyBrand(brand: BrandProfile) {
 }
 
 export function BrandProvider({ children }: { children: ReactNode }) {
-  const { token, user } = useAuth();
+  const { token, user, managingHome } = useAuth();
   const [brand, setBrand] = useState<BrandProfile>(() => {
     const cached = localStorage.getItem(CACHE_KEY);
     if (!cached) return DEFAULT_BRAND_PROFILE;
@@ -45,7 +44,8 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshBrand = async () => {
-    if (!token || isFamilyRole(user?.role) || user?.role === 'SUPER_ADMIN') return;
+    if (!token || isFamilyRole(user?.role)) return;
+    if (user?.role === 'SUPER_ADMIN' && !managingHome) return;
     setIsBrandLoading(true);
     try {
       const profile = await api.getFuneralHomeProfile();
@@ -60,8 +60,15 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       setPreviewBrand(DEFAULT_BRAND_PROFILE);
       return;
     }
+    // Platform owners see the Memory Connect brand unless they are managing a
+    // funeral home, in which case that home's brand is applied.
+    if (user?.role === 'SUPER_ADMIN' && !managingHome) {
+      setPreviewBrand(DEFAULT_BRAND_PROFILE);
+      return;
+    }
+    if (isFamilyRole(user?.role)) return;
     void refreshBrand();
-  }, [token, user?.funeralHomeId, user?.role]);
+  }, [token, user?.funeralHomeId, user?.role, managingHome?.id]);
 
   useEffect(() => applyBrand(brand), [brand]);
 

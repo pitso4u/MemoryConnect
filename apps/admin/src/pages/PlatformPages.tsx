@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Activity, ArrowLeft, Building2, Check, CheckCircle2, Clock3, CreditCard, Copy, ExternalLink, Eye,
   FileText, FileClock, Flag, HardDrive, LayoutDashboard, Mail, Plus, QrCode, RefreshCw, Save,
@@ -17,6 +17,7 @@ import {
 } from '../lib/api';
 import type { PlatformCommercialSettings, MemorialCreditPurchase } from '@memorialconnect/shared';
 import QRPreviewModal from '../components/memorial/QRPreviewModal';
+import { useAuth } from '../context/AuthContext';
 
 const money = (cents = 0, currency = 'ZAR') => new Intl.NumberFormat('en-ZA', { style: 'currency', currency }).format(cents / 100);
 const date = (value?: string | null) => value ? new Intl.DateTimeFormat('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Never';
@@ -661,14 +662,20 @@ function activityIcon(type: PlatformActivity['type']) {
 export function PlatformFuneralHomesPage() {
   const [homes, setHomes] = useState<PlatformFuneralHome[] | null>(null);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
+  const { startManagingHome } = useAuth();
   useEffect(() => { api.getPlatformFuneralHomes().then(setHomes).catch((err: Error) => setError(err.message)); }, []);
+  const manage = (home: PlatformFuneralHome) => {
+    startManagingHome({ id: home.id, name: home.name });
+    navigate('/dashboard');
+  };
   if (error) return <ErrorMessage message={error} />;
   if (!homes) return <Loading />;
   return (
     <>
       <PageHeader title="Funeral Homes" description={`${homes.length} registered organisations and their platform activity.`} />
       <div className="p-5 lg:p-8"><Table><Head><Th>Funeral home</Th><Th>Contact</Th><Th>Registered</Th><Th>Memorials</Th><Th>Payments</Th><Th>Last activity</Th><Th>Status</Th><Th>Action</Th></Head>
-        <tbody>{homes.map((home) => <tr key={home.id}><Td><strong>{home.name}</strong><div className="text-xs text-muted">{home.ownerName || 'No admin assigned'}</div></Td><Td>{home.email}<div className="text-xs text-muted">{home.phone || 'No phone'}</div></Td><Td>{date(home.registeredAt)}</Td><Td>{home.memorialCount}</Td><Td>{money(home.paymentsTotalCents)}</Td><Td>{date(home.lastActivityAt)}</Td><Td><Status value={home.status} /></Td><Td><Link className="font-semibold text-sage hover:underline" to={`/admin-owner/funeral-homes/${home.id}`}>View details</Link></Td></tr>)}</tbody>
+        <tbody>{homes.map((home) => <tr key={home.id}><Td><strong>{home.name}</strong><div className="text-xs text-muted">{home.ownerName || 'No admin assigned'}</div></Td><Td>{home.email}<div className="text-xs text-muted">{home.phone || 'No phone'}</div></Td><Td>{date(home.registeredAt)}</Td><Td>{home.memorialCount}</Td><Td>{money(home.paymentsTotalCents)}</Td><Td>{date(home.lastActivityAt)}</Td><Td><Status value={home.status} /></Td><Td><span className="inline-flex items-center gap-3"><Link className="font-semibold text-sage hover:underline" to={`/admin-owner/funeral-homes/${home.id}`}>View details</Link><button type="button" onClick={() => manage(home)} className="font-semibold text-sage hover:underline">Manage funeral home</button></span></Td></tr>)}</tbody>
       </Table></div>
     </>
   );
@@ -703,12 +710,20 @@ export function PlatformUsersPage() {
       setMessage(`Reset link copied for ${result.email}`);
     } catch (err) { setError((err as Error).message); }
   };
+  const generateTemp = async (user: PlatformUser) => {
+    if (!confirm(`Generate a temporary password for ${user.email}? The current password will be replaced, all existing sessions will be ended, and any outstanding reset links invalidated.`)) return;
+    try {
+      const result = await api.generatePlatformTempPassword(user.id);
+      await navigator.clipboard.writeText(result.tempPassword);
+      setMessage(`Temporary password for ${result.email} copied (expires ${new Date(result.expiresAt).toLocaleTimeString()}): ${result.tempPassword}`);
+    } catch (err) { setError((err as Error).message); }
+  };
   if (error) return <ErrorMessage message={error} />;
   if (!users) return <Loading />;
   return (
     <>
       <PageHeader title="Users" description="Account readiness, roles, and recent access across the platform." />
-      <div className="space-y-4 p-5 lg:p-8">{message && <div className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}<Table><Head><Th>User</Th><Th>Role</Th><Th>Funeral home</Th><Th>Password</Th><Th>Reset requests</Th><Th>Last login</Th><Th>Action</Th></Head><tbody>{users.map((user) => <tr key={user.id}><Td><strong>{user.name}</strong><div className="text-xs text-muted">{user.email}</div></Td><Td>{label(user.role)}</Td><Td>{user.funeralHome?.name || 'Platform / family'}</Td><Td>{user.passwordSetAt ? 'Set' : 'Not set'}</Td><Td>{user.passwordResetTokens.length}</Td><Td>{date(user.lastLoginAt)}</Td><Td><button type="button" onClick={() => sendReset(user)} className="font-semibold text-sage hover:underline">Send reset link</button></Td></tr>)}</tbody></Table></div>
+      <div className="space-y-4 p-5 lg:p-8">{message && <div className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}<Table><Head><Th>User</Th><Th>Role</Th><Th>Funeral home</Th><Th>Password</Th><Th>Reset requests</Th><Th>Last login</Th><Th>Action</Th></Head><tbody>{users.map((user) => <tr key={user.id}><Td><strong>{user.name}</strong><div className="text-xs text-muted">{user.email}</div></Td><Td>{label(user.role)}</Td><Td>{user.funeralHome?.name || 'Platform / family'}</Td><Td>{user.passwordSetAt ? 'Set' : 'Not set'}</Td><Td>{user.passwordResetTokens.length}</Td><Td>{date(user.lastLoginAt)}</Td><Td><span className="inline-flex gap-3"><button type="button" onClick={() => sendReset(user)} className="font-semibold text-sage hover:underline">Send reset link</button><button type="button" onClick={() => generateTemp(user)} className="font-semibold text-sage hover:underline">Generate temp password</button></span></Td></tr>)}</tbody></Table></div>
     </>
   );
 }
@@ -803,6 +818,13 @@ export function PlatformFuneralHomeDetailPage() {
   const [qrModal, setQrModal] = useState<{ open: boolean; url: string; slug: string; deceasedName: string }>({
     open: false, url: '', slug: '', deceasedName: '',
   });
+  const navigate = useNavigate();
+  const { startManagingHome } = useAuth();
+  const manage = () => {
+    if (!home) return;
+    startManagingHome({ id: home.id, name: home.name });
+    navigate('/dashboard');
+  };
   const load = () => api.getPlatformFuneralHome(id).then(setHome).catch((err: Error) => setError(err.message));
   useEffect(() => { void load(); }, [id]);
   const [activeTab, setActiveTab] = useState('overview');
@@ -816,6 +838,11 @@ export function PlatformFuneralHomeDetailPage() {
   const reset = async (user: PlatformUser) => {
     if (!confirm(`Generate a password reset link for ${user.email}?`)) return;
     try { const result = await api.sendPlatformPasswordReset(user.id); await navigator.clipboard.writeText(result.resetUrl); setMessage(`Reset link copied for ${user.email}`); }
+    catch (err) { setError((err as Error).message); }
+  };
+  const generateTemp = async (user: PlatformUser) => {
+    if (!confirm(`Generate a temporary password for ${user.email}? The current password will be replaced, all existing sessions will be ended, and any outstanding reset links invalidated.`)) return;
+    try { const result = await api.generatePlatformTempPassword(user.id); await navigator.clipboard.writeText(result.tempPassword); setMessage(`Temporary password for ${user.email} copied (expires ${new Date(result.expiresAt).toLocaleTimeString()}): ${result.tempPassword}`); }
     catch (err) { setError((err as Error).message); }
   };
   const resend = async (inviteId: string) => {
@@ -860,6 +887,13 @@ export function PlatformFuneralHomeDetailPage() {
             <Link to="/admin-owner/funeral-homes" className="inline-flex items-center gap-2 border border-ink/15 bg-white px-4 py-2 text-sm font-semibold">
               <ArrowLeft size={16} /> Back
             </Link>
+            <button
+              type="button"
+              onClick={manage}
+              className="inline-flex items-center gap-2 border border-sage/40 bg-white px-4 py-2 text-sm font-semibold text-sage"
+            >
+              <Building2 size={16} /> Manage funeral home
+            </button>
             <button
               type="button"
               onClick={toggleStatus}
@@ -928,7 +962,7 @@ export function PlatformFuneralHomeDetailPage() {
           {activeTab === 'users' && (
             <div className="space-y-3">
               <p className="text-sm text-muted">{home.users.length} user{home.users.length === 1 ? '' : 's'}</p>
-              <Table><Head><Th>Name</Th><Th>Role</Th><Th>Password</Th><Th>Last login</Th><Th>Created</Th><Th>Action</Th></Head><tbody>{home.users.map((user) => <tr key={user.id}><Td>{user.name}<div className="text-xs text-muted">{user.email}</div></Td><Td>{label(user.role)}</Td><Td>{user.passwordSetAt ? 'Set' : 'Not set'}</Td><Td>{date(user.lastLoginAt)}</Td><Td>{date(user.createdAt)}</Td><Td><button type="button" onClick={() => reset(user)} className="font-semibold text-sage hover:underline">Send reset link</button></Td></tr>)}</tbody></Table>
+              <Table><Head><Th>Name</Th><Th>Role</Th><Th>Password</Th><Th>Last login</Th><Th>Created</Th><Th>Action</Th></Head><tbody>{home.users.map((user) => <tr key={user.id}><Td>{user.name}<div className="text-xs text-muted">{user.email}</div></Td><Td>{label(user.role)}</Td><Td>{user.passwordSetAt ? 'Set' : 'Not set'}</Td><Td>{date(user.lastLoginAt)}</Td><Td>{date(user.createdAt)}</Td><Td><span className="inline-flex gap-3"><button type="button" onClick={() => reset(user)} className="font-semibold text-sage hover:underline">Send reset link</button><button type="button" onClick={() => generateTemp(user)} className="font-semibold text-sage hover:underline">Generate temp password</button></span></Td></tr>)}</tbody></Table>
             </div>
           )}
 

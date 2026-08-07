@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireRole, ROLES } from '../middleware/auth';
@@ -15,6 +16,9 @@ import {
 
 const router = Router();
 router.use(authenticate, requireRole([ROLES.SUPER_ADMIN]));
+
+/** How long a platform-issued temporary password stays valid before login rejects it. */
+const TEMP_PASSWORD_TTL_MS = 60 * 60 * 1000;
 
 const startOfToday = () => {
   const date = new Date();
@@ -423,6 +427,36 @@ router.post('/users/:id/send-password-reset', async (req, res) => {
   await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash, expiresAt } });
   await audit(req.user!.userId, 'PASSWORD_RESET_SENT', 'USER', user.id, user.funeralHomeId, { email: user.email, expiresAt });
   res.json({ success: true, data: { resetUrl: `${adminBaseUrl()}/reset-password/${token}`, email: user.email, expiresAt } });
+});
+
+router.post('/users/:id/generate-temp-password', async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+  // Friendly charset without ambiguous characters so the owner can relay it.
+  const charset = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.randomBytes(12);
+  const tempPassword = Array.from(bytes, (b) => charset[b % charset.length]).join('');
+  const expiresAt = new Date(Date.now() + TEMP_PASSWORD_TTL_MS);
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await bcrypt.hash(tempPassword, 12),
+        passwordSetAt: new Date(),
+        mustChangePassword: true,
+        temporaryPasswordExpiresAt: expiresAt,
+        // Revoke every existing session: the temporary credential replaces the
+        // user's password, so any previously issued tokens must stop working.
+        tokenVersion: { increment: 1 },
+      },
+    }),
+    prisma.passwordResetToken.deleteMany({ where: { userId: user.id } }),
+  ]);
+  await audit(req.user!.userId, 'TEMPORARY_PASSWORD_GENERATED', 'USER', user.id, user.funeralHomeId, {
+    email: user.email,
+    expiresAt: expiresAt.toISOString(),
+  });
+  res.json({ success: true, data: { email: user.email, tempPassword, expiresAt: expiresAt.toISOString() } });
 });
 
 router.post('/invites/:id/resend', async (req, res) => {

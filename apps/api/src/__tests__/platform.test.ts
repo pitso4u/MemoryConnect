@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import bcrypt from 'bcryptjs';
 import platformRoutes from '../routes/platform';
 import { prisma } from '../lib/prisma';
 import { signToken } from '../middleware/auth';
@@ -102,6 +103,28 @@ describe('platform owner API', () => {
     expect(response.body.data.resetUrl).toContain('/reset-password/');
     expect(JSON.stringify(response.body)).not.toContain('passwordHash');
     expect(await prisma.platformAuditLog.count({ where: { action: 'PASSWORD_RESET_SENT', targetId: adminId } })).toBe(1);
+  });
+
+  it('generates a temporary password, forcing a change and invalidating reset links and sessions', async () => {
+    await request(app).post(`/api/v1/platform/users/${adminId}/send-password-reset`).set('Authorization', `Bearer ${superToken}`);
+    const previous = await prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+
+    const response = await request(app).post(`/api/v1/platform/users/${adminId}/generate-temp-password`).set('Authorization', `Bearer ${superToken}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data.tempPassword).toMatch(/^[A-Za-z0-9]{12}$/);
+    expect(response.body.data.expiresAt).toBeTruthy();
+    expect(JSON.stringify(response.body)).not.toContain('passwordHash');
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: adminId } });
+    expect(updated.passwordHash).not.toBe(previous.passwordHash);
+    expect(await bcrypt.compare(response.body.data.tempPassword, updated.passwordHash)).toBe(true);
+    expect(updated.mustChangePassword).toBe(true);
+    expect(updated.temporaryPasswordExpiresAt).not.toBeNull();
+    expect((updated.temporaryPasswordExpiresAt!.getTime() - Date.now())).toBeGreaterThan(50 * 60 * 1000);
+    expect(updated.temporaryPasswordExpiresAt!.getTime() - Date.now()).toBeLessThan(70 * 60 * 1000);
+    expect(updated.tokenVersion).toBe(previous.tokenVersion + 1);
+    expect(await prisma.passwordResetToken.count({ where: { userId: adminId } })).toBe(0);
+    expect(await prisma.platformAuditLog.count({ where: { action: 'TEMPORARY_PASSWORD_GENERATED', targetId: adminId } })).toBe(1);
   });
 });
 

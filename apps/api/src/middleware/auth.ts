@@ -7,6 +7,10 @@ export interface AuthPayload {
   userId: string;
   funeralHomeId?: string | null;
   role: string;
+  /** Matches the user's tokenVersion; a mismatch means the session was revoked. */
+  tokenVersion?: number;
+  /** Restricted-scope token issued after a successful login with a temporary password. */
+  scope?: 'password_change';
 }
 
 export interface PreviewPayload {
@@ -19,6 +23,8 @@ declare global {
   namespace Express {
     interface Request {
       user?: AuthPayload;
+      /** Set when a SUPER_ADMIN is managing another funeral home via the X-Managing-Funeral-Home header. */
+      managingFuneralHomeId?: string;
     }
   }
 }
@@ -34,13 +40,43 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload;
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, role: true, funeralHomeId: true, funeralHome: { select: { status: true } } },
+      select: { id: true, role: true, funeralHomeId: true, tokenVersion: true, funeralHome: { select: { status: true } } },
     });
     if (!user) return res.status(401).json({ success: false, message: 'Invalid or expired token' });
     if (user.funeralHome?.status === 'SUSPENDED') {
       return res.status(403).json({ success: false, error: 'This funeral home account has been suspended. Please contact Memory Connect support.' });
     }
-    req.user = { userId: user.id, funeralHomeId: user.funeralHomeId, role: normalizeRole(user.role) };
+    // A token signed against an older tokenVersion was issued before the session
+    // was revoked (temp password issued or password changed) and is now stale.
+    if (payload.tokenVersion !== undefined && payload.tokenVersion !== user.tokenVersion) {
+      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    }
+    // Temporary-password tokens are scoped: they may only reach the
+    // change-password endpoint until the user sets a permanent password.
+    const targetPath = `${req.baseUrl}${req.path}`;
+    if (payload.scope === 'password_change' && !/\/change-password$/.test(targetPath)) {
+      return res.status(403).json({ success: false, error: 'Password change required', code: 'PASSWORD_CHANGE_REQUIRED' });
+    }
+    const role = normalizeRole(user.role);
+    // SUPER_ADMIN management context. The header identifies which funeral home the
+    // platform owner is currently managing; identity stays SUPER_ADMIN and only
+    // the scoping funeralHomeId is overridden so the owner's own account is never
+    // used. Non-SUPER_ADMIN callers may never set the header, and the target home
+    // must exist.
+    const managingId = req.headers['x-managing-funeral-home'];
+    if (managingId) {
+      if (role !== ROLES.SUPER_ADMIN) {
+        return res.status(403).json({ success: false, error: 'You do not have permission to manage a funeral home' });
+      }
+      const managedHome = await prisma.funeralHome.findUnique({ where: { id: String(managingId) }, select: { id: true } });
+      if (!managedHome) {
+        return res.status(404).json({ success: false, error: 'Funeral home not found' });
+      }
+      req.managingFuneralHomeId = managedHome.id;
+      req.user = { userId: user.id, funeralHomeId: managedHome.id, role, tokenVersion: user.tokenVersion };
+      return next();
+    }
+    req.user = { userId: user.id, funeralHomeId: user.funeralHomeId, role, tokenVersion: user.tokenVersion };
     next();
   } catch {
     return res.status(401).json({ success: false, message: 'Invalid or expired token' });
@@ -131,8 +167,12 @@ export function requireMemorialAccess(memorialIdFromRequest: (req: Request) => s
   };
 }
 
-export function signToken(payload: AuthPayload): string {
-  return jwt.sign({ ...payload, role: normalizeRole(payload.role) }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as SignOptions);
+export function signToken(payload: AuthPayload, options?: SignOptions): string {
+  return jwt.sign(
+    { ...payload, role: normalizeRole(payload.role) },
+    env.JWT_SECRET,
+    { expiresIn: env.JWT_EXPIRES_IN, ...options } as SignOptions,
+  );
 }
 
 export function signPreviewToken(memorialId: string, funeralHomeId: string): string {

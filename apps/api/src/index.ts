@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth';
 import memorialRoutes from './routes/memorials';
 import photoRoutes from './routes/photos';
@@ -22,12 +21,15 @@ import funeralResourceRoutes from './routes/funeral-resources';
 import featureRoutes from './routes/features';
 import entitlementRoutes from './routes/entitlement';
 import { prisma } from './lib/prisma';
+import { trustProxy } from './lib/trustProxy';
 import { UPLOADS_DIR } from './lib/uploads';
 import { printServerUrls } from './lib/network';
 import { env } from './lib/env';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { manageAudit } from './middleware/manageAudit';
 
 const app = express();
+app.set('trust proxy', trustProxy);
 const PORT = env.PORT;
 const HOST = env.HOST;
 
@@ -59,16 +61,6 @@ function buildCorsOrigin():
 
   return [...new Set([...defaults, ...extra])];
 }
-
-// Rate limiting for auth endpoints
-const authLimiter = rateLimit({
-  windowMs: env.AUTH_RATE_LIMIT_WINDOW_MS,
-  max: env.AUTH_RATE_LIMIT_MAX ?? (env.NODE_ENV === 'production' ? 10 : 100),
-  message: { success: false, message: 'Too many attempts, please try again later' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
-});
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -128,8 +120,13 @@ app.get('/sitemap.xml', async (_req, res) => {
   }
 });
 
+// SUPER_ADMIN management-context audit (records mutations made while managing
+// another funeral home). Mounted before the API v1 routers so it can tag the
+// response as it finishes.
+app.use('/api/v1', manageAudit);
+
 // API v1 routes
-app.use('/api/v1/auth', authLimiter, authRoutes);
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/memorials', memorialRoutes);
 app.use('/api/v1/memorials/:id/locations', locationRoutes);
 app.use('/api/v1/memorials/:id/photos', photoRoutes);
@@ -157,7 +154,7 @@ app.use('/api/v1/funeral-resources', funeralResourceRoutes);
 app.use('/api/v1/platform/features', featureRoutes);
 
 // Legacy routes for backward compatibility (will be deprecated)
-app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/memorials', memorialRoutes);
 app.use('/api/memorials/:id/locations', locationRoutes);
 app.use('/api/memorials/:id/photos', photoRoutes);
