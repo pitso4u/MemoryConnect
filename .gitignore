@@ -13,6 +13,9 @@ build/
 .env.local
 .env.*.local
 
+# SmartReach production secrets (never committed; injected via compose)
+smartreach.env.production.local
+
 # Logs
 logs/
 *.log

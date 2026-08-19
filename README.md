@@ -230,8 +230,24 @@ docker compose -f docker-compose.prod.yml restart \
 > SmartReach AI (`smartreach.memoryconnect.co.za`) is a self-contained app under
 > `apps/smartreach-ai` with its own nginx + API container, its own SQLite
 > database (`/data/smartreach.db`), and its own env file
-> (`smartreach.env.production`). Before first deploy, set real JWT secrets there
-> and choose an AI provider (`template` works offline; see
+> (`smartreach.env.production`). **This repo is public, so production secrets
+> are never committed.** The tracked env file only carries non-secret
+> configuration; the JWT secrets are injected by docker compose from an
+> untracked `.env` file on the VM:
+>
+> ```bash
+> cd /home/pitso4u/apps/MemoryConnect
+> # one time only — `.env` is gitignored and never pushed
+> cat > .env <<'EOF'
+> JWT_ACCESS_SECRET=<generate-a-long-random-value>
+> JWT_REFRESH_SECRET=<generate-a-different-long-random-value>
+> EOF
+> ```
+>
+> `docker compose` fails loudly if these are missing (the `:?` in
+> `docker-compose.prod.yml`), so a misconfigured deployment can never silently
+> fall back to dev secrets. Pick an AI provider deliberately (`template` works
+> offline and is the safe default; see
 > [`apps/smartreach-ai/docs/ai-providers.md`](apps/smartreach-ai/docs/ai-providers.md)).
 > The container runs `prisma db push` on start, so no manual seed step is needed.
 
