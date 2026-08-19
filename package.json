@@ -21,7 +21,8 @@
     "memorials:delete": "tsx scripts/delete-expired-memorials.ts",
     "memorials:delete-videos": "tsx scripts/delete-expired-videos.ts",
     "seed:demo": "npm run seed:demo -w @memorialconnect/api",
-    "reset:demo": "npm run reset:demo -w @memorialconnect/api"
+    "reset:demo": "npm run reset:demo -w @memorialconnect/api",
+    "lint": "eslint ."
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.19.1",
@@ -29,6 +30,7 @@
     "concurrently": "^9.1.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "prettier": "^3.4.2"
   },
   "engines": {
