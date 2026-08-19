@@ -20,6 +20,7 @@ import assetRoutes from './routes/assets';
 import funeralResourceRoutes from './routes/funeral-resources';
 import featureRoutes from './routes/features';
 import entitlementRoutes from './routes/entitlement';
+import crmRoutes from './routes/crm';
 import { prisma } from './lib/prisma';
 import { trustProxy } from './lib/trustProxy';
 import { UPLOADS_DIR } from './lib/uploads';
@@ -152,6 +153,9 @@ app.use('/api/v1/funeral-resources', funeralResourceRoutes);
 
 // Feature management routes (platform owner)
 app.use('/api/v1/platform/features', featureRoutes);
+
+// Sales CRM routes
+app.use('/api/v1/crm', crmRoutes);
 
 // Legacy routes for backward compatibility (will be deprecated)
 app.use('/api/auth', authRoutes);

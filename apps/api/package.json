@@ -11,6 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "seed:demo": "node dist/scripts/seed-demo.js",
+    "seed:crm": "tsx src/scripts/seed-crm.ts",
     "reset:demo": "node dist/scripts/seed-demo.js",
     "seed:features": "tsx src/scripts/seed-features.ts",
     "reset:test-data": "tsx src/scripts/reset-test-data.ts",

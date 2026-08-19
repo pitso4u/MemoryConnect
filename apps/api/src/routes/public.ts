@@ -23,22 +23,20 @@ function expired(res: any) {
   return res.status(410).json({ success: false, code: 'MEMORIAL_EXPIRED', message: 'This memorial viewing period has ended.' });
 }
 
-function dateBucket(now = new Date()) {
-  return now.toISOString().slice(0, 10);
-}
-
 function isLikelyBot(userAgent?: string | null) {
   if (!userAgent) return true;
   return /bot|crawler|spider|preview|facebookexternalhit|whatsapp|slackbot|telegrambot|headless|serviceworker/i.test(userAgent);
 }
 
-function visitorHash(visitorId: string | undefined, ip: string | undefined, userAgent: string | undefined) {
-  const seed = [visitorId || 'no-visitor-id', ip || 'no-ip', userAgent || 'no-user-agent'].join('|');
-  return crypto.createHash('sha256').update(`${env.JWT_SECRET}:${seed}`).digest('hex');
+// The visitor identity is the persistent anonymous browser ID alone. IP
+// address and user-agent are intentionally excluded so a visitor moving
+// between networks (or a changed UA) still resolves to the same person.
+function visitorHash(visitorId: string) {
+  return crypto.createHash('sha256').update(`${env.JWT_SECRET}:visitor:${visitorId}`).digest('hex');
 }
 
 const viewSchema = z.object({
-  visitorId: z.string().trim().min(12).max(200).optional(),
+  visitorId: z.string().trim().min(12).max(200),
 });
 
 const publicMemorialInclude = {
@@ -139,17 +137,19 @@ router.post('/memorials/:slug/view', async (req, res) => {
       return res.json({ success: true, data: { counted: false, viewCount: memorial.viewCount } });
     }
 
-    const hash = visitorHash(body.visitorId, req.ip, userAgent || undefined);
-    const bucket = dateBucket();
+    const hash = visitorHash(body.visitorId);
     const now = new Date();
     let counted = false;
     const updated = await prisma.$transaction(async (tx) => {
       try {
+        // Idempotent insert: ONE visitor + ONE memorial = ONE view, forever.
+        // The (memorialId, visitorHash) unique constraint turns repeats
+        // (refreshes, reopens, later days) into a no-op — equivalent to
+        // INSERT ... ON CONFLICT (memorialId, visitorHash) DO NOTHING.
         await tx.memorialView.create({
           data: {
             memorialId: memorial.id,
             visitorHash: hash,
-            dateBucket: bucket,
             userAgent,
             referrer: req.get('referer')?.slice(0, 1000) || null,
             createdAt: now,
@@ -193,7 +193,7 @@ async function recordEngagement(req: Request, eventType: 'qr_scan' | 'share', re
     const now = new Date();
     await prisma.$transaction(async (tx) => {
       await applyPerformanceEvent(tx, { id: memorial.id, publishedAt: memorial.publishedAt }, eventType, {
-        visitorHash: visitorHash(undefined, req.ip, req.get('user-agent')?.slice(0, 500) || undefined),
+        visitorHash: null,
         now,
       });
     });

@@ -584,8 +584,8 @@ export default function MemorialDetailPage({ initialTab = 'programme' }: { initi
 {analytics && (
         <section className="mt-8 rounded-2xl border border-parchment-dark bg-white p-6">
           <div className="flex items-center gap-2"><BarChart3 size={19} className="text-gold-dark" /><h2 className="font-display text-2xl text-ink">Public viewing</h2></div>
-          <div className="mt-5 grid gap-4 sm:grid-cols-3">
-            {[['Total views', analytics.totalViews], ['Views today', analytics.viewsToday], ['Last 7 days', analytics.viewsLast7Days]].map(([label, value]) => (
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[['Total views', analytics.totalViews], ['Unique visitors', analytics.uniqueVisitors], ['Views today', analytics.viewsToday], ['Last 7 days', analytics.viewsLast7Days]].map(([label, value]) => (
               <div key={label} className="rounded-xl bg-parchment p-4"><p className="flex items-center gap-1.5 text-xs text-muted"><Eye size={13} />{label}</p><p className="mt-2 font-display text-3xl text-ink">{value}</p></div>
             ))}
           </div>

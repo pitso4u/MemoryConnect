@@ -505,3 +505,85 @@ textarea {
     grid-column: 1;
   }
 }
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.save-indicator {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 253, 244, 0.85);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.user-chip {
+  max-width: 180px;
+  overflow: hidden;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 253, 244, 0.85);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error-strip {
+  border-color: rgba(181, 69, 69, 0.45);
+  background: rgba(255, 235, 232, 0.95);
+  color: var(--danger);
+}
+
+.error-strip span {
+  flex: 1;
+  background: rgba(181, 69, 69, 0.12);
+}
+
+.notice-strip {
+  border-color: rgba(47, 95, 143, 0.35);
+  background: rgba(233, 243, 250, 0.95);
+}
+
+.notice-strip span {
+  background: rgba(47, 95, 143, 0.12);
+}
+
+.dismiss-button {
+  margin-left: auto;
+  padding: 2px 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.login-shell {
+  width: min(460px, calc(100% - 28px));
+}
+
+.login-panel .field-grid {
+  grid-template-columns: 1fr;
+}
+
+.login-panel .primary-button {
+  margin-top: 4px;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+

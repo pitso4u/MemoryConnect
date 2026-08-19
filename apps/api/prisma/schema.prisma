@@ -126,6 +126,7 @@ model User {
   featureOverrides UserFeature[]
   passwordSetAt DateTime?
   lastLoginAt   DateTime?
+  crmLeads      CrmLead[]
   // Temporary credentials issued by the platform owner. While true, the user
   // must set a new password before the rest of the app is usable.
   mustChangePassword        Boolean   @default(false)
@@ -418,8 +419,9 @@ model MemorialView {
   id          String   @id @default(cuid())
   memorialId  String
   memorial    Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
-  visitorHash String?
-  dateBucket  String?
+  // Lifetime-unique visitor identity. A single anonymous visitor (persistent
+  // browser ID) counts once per memorial regardless of refreshes or days.
+  visitorHash String
   userAgent   String?
   referrer    String?
   viewedAt    DateTime? @default(now())
@@ -428,7 +430,7 @@ model MemorialView {
   deviceType  String?
   createdAt   DateTime @default(now())
 
-  @@unique([memorialId, visitorHash, dateBucket])
+  @@unique([memorialId, visitorHash])
   @@index([memorialId, createdAt])
   @@index([createdAt])
 }
@@ -1038,4 +1040,44 @@ model FeatureAuditLog {
   @@index([featureKey])
   @@index([targetType, targetId])
   @@index([createdAt])
+}
+
+model CrmLead {
+  id           String        @id @default(cuid())
+  project      String        @default("Memory Connect")
+  funeralHome  String
+  province     String        @default("Free State")
+  town         String?
+  owner        String?
+  phone        String?
+  whatsapp     String?
+  email        String?
+  website      String?
+  facebook     String?
+  source       String?
+  status       String        @default("New")
+  revenue      Float         @default(0)
+  followUpDate String?
+  demoDate     String?
+  notes        String?
+  createdById  String?
+  createdBy    User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  dateAdded    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  activities   CrmActivity[]
+
+  @@index([status])
+  @@index([dateAdded])
+}
+
+model CrmActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      CrmLead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type      String
+  note      String?
+  at        DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
 }

@@ -211,14 +211,21 @@ After pulling the updated branch on the VM, rebuild the containers, sync Prisma,
 cd /home/pitso4u/apps/MemoryConnect
 
 docker compose -f docker-compose.prod.yml up -d --build \
-  memoryconnect-api memoryconnect-public memoryconnect-admin
+  memoryconnect-api memoryconnect-public memoryconnect-admin memoryconnect-sales-crm
 
 docker exec memoryconnect-api sh -c "npx prisma db push"
 docker exec memoryconnect-api sh -c "npm run seed:demo"
+docker exec memoryconnect-api sh -c "npm run seed:crm"
 
 docker compose -f docker-compose.prod.yml restart \
-  memoryconnect-api memoryconnect-public memoryconnect-admin
+  memoryconnect-api memoryconnect-public memoryconnect-admin memoryconnect-sales-crm
 ```
+
+> The sales CRM (`crm.memoryconnect.co.za`) stores leads in the same production
+> database as the rest of the platform (`/data/memoryconnect.db`). `seed:crm` is
+> idempotent — it only inserts the two sample leads when the CRM is empty. All
+> CRM mutations go through `/api/v1/crm` and require a signed-in Memory Connect
+> account.
 
 Purge Cloudflare cache for `/`, `/demo`, `/manifest.webmanifest`, and `/brand/*`. Test in a private browser. If a test device still shows the old shell or old logo, unregister the old service worker once from browser dev tools, then reload.
 

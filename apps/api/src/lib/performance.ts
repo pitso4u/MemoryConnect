@@ -71,7 +71,7 @@ export interface DayTotals {
   shares: number;
 }
 
-function buildMilestones(dayViews: [number, number, number]): Array<{ day: number; badge: string; label: string; views: number }> {
+export function buildMilestones(dayViews: [number, number, number]): Array<{ day: number; badge: string; label: string; views: number }> {
   const earned: Array<{ day: number; badge: string; label: string; views: number }> = [];
   dayViews.forEach((views, index) => {
     if (views <= 0) return;
@@ -168,7 +168,7 @@ export async function finalizePerformance(memorialId: string, now = new Date()):
     const window = windowForDay(memorial.publishedAt, day);
     const uniqueVisitors = await prisma.memorialView.groupBy({
       by: ['visitorHash'],
-      where: { memorialId, visitorHash: { not: null }, createdAt: { gte: window.start, lt: window.end } },
+      where: { memorialId, createdAt: { gte: window.start, lt: window.end } },
       _count: true,
     });
     dayTotals.push({

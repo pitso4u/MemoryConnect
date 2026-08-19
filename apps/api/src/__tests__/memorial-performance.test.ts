@@ -9,13 +9,17 @@ import { signToken } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { MEMORIAL_STATUS } from '../lib/publishing';
 import { milestoneForViews, ratePerformance } from '../lib/performance';
+import { migrateMemorialViews } from '../lib/viewAnalytics';
 
 const app = express();
 app.use(express.json());
 app.use('/api/v1/memorials', memorialRoutes);
 app.use('/api/v1/public', publicRoutes);
 
-beforeAll(() => {
+beforeAll(async () => {
+  // Rewrite legacy daily-bucket view rows first so `prisma db push` can apply
+  // the lifetime-unique schema without tripping a data-loss warning.
+  await migrateMemorialViews();
   execFileSync('npx', ['prisma', 'db', 'push', '--schema=prisma/schema.prisma', '--skip-generate'], {
     cwd: process.cwd(),
     stdio: 'ignore',
@@ -106,6 +110,69 @@ describe('72-hour memorial performance', () => {
     await prisma.funeralHome.delete({ where: { id: funeralHome.id } });
   });
 
+  it('counts each anonymous visitor once per memorial for life (refreshes, reopens, later days)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const publishedAt = new Date('2026-08-04T09:15:00Z');
+    vi.setSystemTime(publishedAt);
+    const { funeralHome, token } = await home('lifetime-unique');
+    const memorial = await publishedMemorial(funeralHome.id, 'Lifetime Unique', publishedAt);
+
+    // Person A opens, refreshes, and reopens on the same day.
+    expect(await view(memorial, 'visitor-aaa-1234567')).toBe(true);
+    expect(await view(memorial, 'visitor-aaa-1234567')).toBe(false);
+    expect(await view(memorial, 'visitor-aaa-1234567')).toBe(false);
+
+    // Person A returns on later days — still never counted again.
+    vi.setSystemTime(new Date('2026-08-05T09:15:00Z'));
+    expect(await view(memorial, 'visitor-aaa-1234567')).toBe(false);
+
+    // Person B arrives.
+    expect(await view(memorial, 'visitor-bbb-1234567')).toBe(true);
+    expect(await view(memorial, 'visitor-bbb-1234567')).toBe(false);
+
+    // Person C arrives.
+    vi.setSystemTime(new Date('2026-08-06T09:15:00Z'));
+    expect(await view(memorial, 'visitor-ccc-1234567')).toBe(true);
+
+    const analytics = await request(app).get(`/api/v1/memorials/${memorial.id}/analytics`).set('Authorization', `Bearer ${token}`);
+    expect(analytics.body.data.totalViews).toBe(3);
+    expect(analytics.body.data.uniqueVisitors).toBe(3);
+
+    // Everyone returns on a much later day: the count must not move.
+    vi.setSystemTime(new Date('2026-08-10T09:15:00Z'));
+    expect(await view(memorial, 'visitor-aaa-1234567')).toBe(false);
+    expect(await view(memorial, 'visitor-bbb-1234567')).toBe(false);
+    expect(await view(memorial, 'visitor-ccc-1234567')).toBe(false);
+
+    const after = await request(app).get(`/api/v1/memorials/${memorial.id}/analytics`).set('Authorization', `Bearer ${token}`);
+    expect(after.body.data.totalViews).toBe(3);
+    expect(after.body.data.uniqueVisitors).toBe(3);
+
+    await prisma.funeralHome.delete({ where: { id: funeralHome.id } });
+  });
+
+  it('keeps different memorials independent for the same visitor', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-04T09:15:00Z'));
+    const { funeralHome, token } = await home('multi-memorial');
+    const a = await publishedMemorial(funeralHome.id, 'Multi A', new Date('2026-08-04T09:15:00Z'));
+    const b = await publishedMemorial(funeralHome.id, 'Multi B', new Date('2026-08-04T09:15:00Z'));
+
+    expect(await view(a, 'visitor-aaa-1234567')).toBe(true);
+    expect(await view(a, 'visitor-aaa-1234567')).toBe(false);
+    expect(await view(b, 'visitor-aaa-1234567')).toBe(true);
+    expect(await view(b, 'visitor-aaa-1234567')).toBe(false);
+
+    const analyticsA = await request(app).get(`/api/v1/memorials/${a.id}/analytics`).set('Authorization', `Bearer ${token}`);
+    const analyticsB = await request(app).get(`/api/v1/memorials/${b.id}/analytics`).set('Authorization', `Bearer ${token}`);
+    expect(analyticsA.body.data.totalViews).toBe(1);
+    expect(analyticsA.body.data.uniqueVisitors).toBe(1);
+    expect(analyticsB.body.data.totalViews).toBe(1);
+    expect(analyticsB.body.data.uniqueVisitors).toBe(1);
+
+    await prisma.funeralHome.delete({ where: { id: funeralHome.id } });
+  });
+
   it('keeps Day 2 and Day 3 in their own 24-hour windows', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const publishedAt = new Date('2026-08-04T09:15:00Z');
@@ -116,18 +183,20 @@ describe('72-hour memorial performance', () => {
     expect(await view(memorial, 'visitor-a-1234567')).toBe(true);
     expect(await view(memorial, 'visitor-b-1234567')).toBe(true);
 
+    // visitor-a already counted on Day 2, so returning on Day 3 never counts
+    // again. Each visitor is lifetime-unique per memorial.
     vi.setSystemTime(new Date('2026-08-06T09:15:00Z'));
-    expect(await view(memorial, 'visitor-a-1234567')).toBe(true);
+    expect(await view(memorial, 'visitor-a-1234567')).toBe(false);
     expect(await view(memorial, 'visitor-c-1234567')).toBe(true);
 
     const analytics = await request(app).get(`/api/v1/memorials/${memorial.id}/analytics`).set('Authorization', `Bearer ${token}`);
     const performance = analytics.body.data.performance;
     expect(performance.days[0]).toMatchObject({ views: 0, uniqueVisitors: 0 });
     expect(performance.days[1]).toMatchObject({ views: 2, uniqueVisitors: 2 });
-    expect(performance.days[2]).toMatchObject({ views: 2, uniqueVisitors: 2 });
-    expect(performance.totals.views).toBe(4);
+    expect(performance.days[2]).toMatchObject({ views: 1, uniqueVisitors: 1 });
+    expect(performance.totals.views).toBe(3);
     expect(performance.trend[1]).toMatchObject({ day: 2, views: 2 });
-    expect(performance.trend[2].views).toBe(2);
+    expect(performance.trend[2].views).toBe(1);
 
     await prisma.funeralHome.delete({ where: { id: funeralHome.id } });
   });
@@ -141,7 +210,8 @@ describe('72-hour memorial performance', () => {
 
     await view(memorial, 'visitor-a-1234567');
     vi.setSystemTime(new Date('2026-08-02T09:15:00Z'));
-    await view(memorial, 'visitor-a-1234567');
+    // visitor-a already counted on Day 1, so this repeat is a no-op.
+    expect(await view(memorial, 'visitor-a-1234567')).toBe(false);
     await view(memorial, 'visitor-b-1234567');
     vi.setSystemTime(new Date('2026-08-03T09:15:00Z'));
     await view(memorial, 'visitor-c-1234567');
@@ -152,19 +222,19 @@ describe('72-hour memorial performance', () => {
     expect(performance.finalized).toBe(true);
     expect(performance.monitoringActive).toBe(false);
     expect(performance.days[0]).toMatchObject({ views: 1, uniqueVisitors: 1, snapshot: true });
-    expect(performance.days[1]).toMatchObject({ views: 2, uniqueVisitors: 2, snapshot: true });
+    expect(performance.days[1]).toMatchObject({ views: 1, uniqueVisitors: 1, snapshot: true });
     expect(performance.days[2]).toMatchObject({ views: 1, uniqueVisitors: 1, snapshot: true });
     expect(performance.snapshots).toEqual([
       { day: 1, views: 1, visitors: 1 },
-      { day: 2, views: 3, visitors: 3 },
-      { day: 3, views: 4, visitors: 4 },
+      { day: 2, views: 2, visitors: 2 },
+      { day: 3, views: 3, visitors: 3 },
     ]);
 
     const stored = await prisma.memorialPerformance.findUniqueOrThrow({ where: { memorialId: memorial.id } });
     expect(stored.finalized).toBe(true);
-    expect(stored.total72HourViews).toBe(4);
+    expect(stored.total72HourViews).toBe(3);
     expect(stored.day1Views).toBe(1);
-    expect(stored.day2Views).toBe(2);
+    expect(stored.day2Views).toBe(1);
     expect(stored.day3Views).toBe(1);
 
     await prisma.funeralHome.delete({ where: { id: funeralHome.id } });

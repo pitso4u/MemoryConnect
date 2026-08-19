@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { migrateMemorialViews } from '../lib/viewAnalytics';
 
 type SqliteColumn = {
   name: string;
@@ -37,6 +38,10 @@ async function prepareDatabase() {
     );
     console.log('Preserved memorial photos in the coverPhotoUrl database column.');
   }
+
+  // Rewrites legacy daily-bucket memorial views to lifetime-unique records
+  // before `prisma db push` applies the new schema.
+  await migrateMemorialViews();
 }
 
 prepareDatabase()

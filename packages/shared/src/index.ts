@@ -294,6 +294,7 @@ export interface MemorialCreditPurchase {
 
 export interface MemorialAnalytics {
   totalViews: number;
+  uniqueVisitors: number;
   viewsToday: number;
   viewsLast7Days: number;
   viewsByMemorial: Array<{ id: string; deceasedName: string; viewCount: number }>;
@@ -1064,6 +1065,41 @@ export const updateVehicleSchema = createVehicleSchema.partial();
 
 export type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
 export type UpdateVehicleInput = z.infer<typeof updateVehicleSchema>;
+
+export const CRM_LEAD_STATUSES = ['New', 'Contacted', 'Waiting', 'Demo Booked', 'Customer', 'Lost'] as const;
+export const CRM_ACTIVITY_TYPES = ['Email', 'WhatsApp', 'Call', 'Follow-up', 'Demo', 'Closed Sale', 'Not Interested'] as const;
+
+const optionalNullableString = z.string().max(500).optional().nullable();
+
+export const createCrmLeadSchema = z.object({
+  project: z.string().min(1).max(100).default('Memory Connect'),
+  funeralHome: z.string().min(1).max(300),
+  province: z.string().min(1).max(100).default('Free State'),
+  town: optionalNullableString,
+  owner: optionalNullableString,
+  phone: optionalNullableString,
+  whatsapp: optionalNullableString,
+  email: z.string().email().optional().nullable().or(z.literal('')),
+  website: z.string().max(500).optional().nullable().or(z.literal('')),
+  facebook: z.string().max(500).optional().nullable().or(z.literal('')),
+  source: z.string().max(200).optional().nullable(),
+  status: z.enum(CRM_LEAD_STATUSES).optional(),
+  revenue: z.number().min(0).optional(),
+  followUpDate: z.string().max(20).optional().nullable().or(z.literal('')),
+  demoDate: z.string().max(20).optional().nullable().or(z.literal('')),
+  notes: z.string().max(10000).optional().nullable(),
+});
+
+export const updateCrmLeadSchema = createCrmLeadSchema.partial();
+
+export const createCrmActivitySchema = z.object({
+  type: z.enum(CRM_ACTIVITY_TYPES),
+  note: z.string().max(2000).optional().nullable(),
+});
+
+export type CreateCrmLeadInput = z.infer<typeof createCrmLeadSchema>;
+export type UpdateCrmLeadInput = z.infer<typeof updateCrmLeadSchema>;
+export type CreateCrmActivityInput = z.infer<typeof createCrmActivitySchema>;
 
 export const createServiceHistorySchema = z.object({
   serviceDate: z.string().refine((v) => !isNaN(Date.parse(v)), 'Invalid date'),

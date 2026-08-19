@@ -249,9 +249,10 @@ router.get('/:id/analytics', authenticate, async (req, res) => {
     where: { funeralHomeId: req.user!.funeralHomeId, status: { not: MEMORIAL_STATUS.DELETED } },
     select: { id: true, deceasedName: true, viewCount: true },
   });
-  const [viewsToday, viewsLast7Days, performance] = await Promise.all([
+  const [viewsToday, viewsLast7Days, uniqueVisitors, performance] = await Promise.all([
     prisma.memorialView.count({ where: { memorialId: memorial.id, createdAt: { gte: today } } }),
     prisma.memorialView.count({ where: { memorialId: memorial.id, createdAt: { gte: sevenDaysAgo } } }),
+    prisma.memorialView.groupBy({ by: ['visitorHash'], where: { memorialId: memorial.id } }).then((rows) => rows.length),
     buildPerformancePayload({ id: memorial.id, publishedAt: memorial.publishedAt }, now),
   ]);
   const topViewedMemorials = [...homeMemorials]
@@ -261,6 +262,7 @@ router.get('/:id/analytics', authenticate, async (req, res) => {
     success: true,
     data: {
       totalViews: memorial.viewCount,
+      uniqueVisitors,
       viewsToday,
       viewsLast7Days,
       viewsByMemorial: homeMemorials,
