@@ -26,7 +26,7 @@ module.exports = [
       'apps/api/prisma/**',
       'apps/api/src/generated/**',
       '**/dev-dist/**',
-      'smartreach-ai/**',
+      'apps/smartreach-ai/**',
     ],
   },
   {

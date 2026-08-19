@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../../../generated/prisma";
 import { publishScheduledPost } from "@smartreach/publish";
 import dotenv from "dotenv";
 import path from "path";

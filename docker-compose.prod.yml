@@ -64,6 +64,25 @@ services:
       - "traefik.http.routers.memoryconnect-sales-crm.tls=true"
       - "traefik.http.services.memoryconnect-sales-crm.loadbalancer.server.port=80"
 
+  memoryconnect-smartreach-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile.smartreach-ai
+    container_name: memoryconnect-smartreach-ai
+    restart: unless-stopped
+    env_file:
+      - smartreach.env.production
+    volumes:
+      - ./data:/data
+    networks:
+      - infrastructure_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memoryconnect-smartreach-ai.rule=Host(`smartreach.memoryconnect.co.za`)"
+      - "traefik.http.routers.memoryconnect-smartreach-ai.entrypoints=web,websecure"
+      - "traefik.http.routers.memoryconnect-smartreach-ai.tls=true"
+      - "traefik.http.services.memoryconnect-smartreach-ai.loadbalancer.server.port=80"
+
 networks:
   infrastructure_default:
     external: true

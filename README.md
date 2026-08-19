@@ -211,14 +211,14 @@ After pulling the updated branch on the VM, rebuild the containers, sync Prisma,
 cd /home/pitso4u/apps/MemoryConnect
 
 docker compose -f docker-compose.prod.yml up -d --build \
-  memoryconnect-api memoryconnect-public memoryconnect-admin memoryconnect-sales-crm
+  memoryconnect-api memoryconnect-public memoryconnect-admin memoryconnect-sales-crm memoryconnect-smartreach-ai
 
 docker exec memoryconnect-api sh -c "npx prisma db push"
 docker exec memoryconnect-api sh -c "npm run seed:demo"
 docker exec memoryconnect-api sh -c "npm run seed:crm"
 
 docker compose -f docker-compose.prod.yml restart \
-  memoryconnect-api memoryconnect-public memoryconnect-admin memoryconnect-sales-crm
+  memoryconnect-api memoryconnect-public memoryconnect-admin memoryconnect-sales-crm memoryconnect-smartreach-ai
 ```
 
 > The sales CRM (`crm.memoryconnect.co.za`) stores leads in the same production
@@ -226,6 +226,14 @@ docker compose -f docker-compose.prod.yml restart \
 > idempotent — it only inserts the two sample leads when the CRM is empty. All
 > CRM mutations go through `/api/v1/crm` and require a signed-in Memory Connect
 > account.
+
+> SmartReach AI (`smartreach.memoryconnect.co.za`) is a self-contained app under
+> `apps/smartreach-ai` with its own nginx + API container, its own SQLite
+> database (`/data/smartreach.db`), and its own env file
+> (`smartreach.env.production`). Before first deploy, set real JWT secrets there
+> and choose an AI provider (`template` works offline; see
+> [`apps/smartreach-ai/docs/ai-providers.md`](apps/smartreach-ai/docs/ai-providers.md)).
+> The container runs `prisma db push` on start, so no manual seed step is needed.
 
 Purge Cloudflare cache for `/`, `/demo`, `/manifest.webmanifest`, and `/brand/*`. Test in a private browser. If a test device still shows the old shell or old logo, unregister the old service worker once from browser dev tools, then reload.
 
