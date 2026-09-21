@@ -300,6 +300,54 @@ router.post('/memorials/:slug/tributes', async (req, res) => {
   }
 });
 
+// Public tributes listing - explicit endpoint for public tributes listing
+// Returns only approved tributes for public memorials
+const tributesListSchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+router.get('/memorials/:slug/tributes', async (req, res) => {
+  try {
+    const slug = queryValue(req.params.slug);
+    if (slug === DEMO_SLUG) {
+      const demo = await getSeededDemoMemorial();
+      return res.json({ success: true, data: demo?.tributes ?? [] });
+    }
+    const memorial = await prisma.memorial.findFirst({
+      where: { slug, deletedAt: null },
+      select: { id: true, status: true, publicExpiresAt: true, settings: true, deletedAt: true },
+    });
+    if (!memorial) return res.status(404).json({ success: false, message: 'Memorial not found' });
+    if (!isPubliclyViewable(memorial)) return expired(res);
+    const settings = memorial.settings as Record<string, unknown>;
+    if (!settings.showTributeWall) return res.status(403).json({ success: false, message: 'Tribute wall is disabled' });
+
+    const limit = Math.min(Number(req.query.limit) || 20, 50);
+    const cursor = req.query.cursor as string | undefined;
+
+    const tributes = await prisma.tribute.findMany({
+      where: { memorialId: memorial.id, approved: true },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      cursor: cursor ? { id: cursor } : undefined,
+      select: { id: true, authorName: true, message: true, createdAt: true },
+    });
+
+    let nextCursor: string | undefined;
+    if (tributes.length > limit) {
+      const next = tributes.pop();
+      nextCursor = next?.id;
+    }
+
+    res.json({ success: true, data: { tributes, nextCursor } });
+  } catch (error) {
+    if (isZodError(error)) return res.status(400).json({ success: false, message: error.errors[0].message });
+    console.error('List public tributes error:', error);
+    res.status(500).json({ success: false, message: 'Failed to list tributes' });
+  }
+});
+
 router.post('/verify-qa', async (req, res) => {
   try {
     const token = req.body?.token;
