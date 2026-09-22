@@ -289,11 +289,11 @@ router.post('/memorials/:slug/tributes', async (req, res) => {
     if (!isPubliclyViewable(memorial)) return expired(res);
     const settings = memorial.settings as Record<string, unknown>;
     if (!settings.showTributeWall) return res.status(403).json({ success: false, message: 'Tribute wall is disabled' });
-    const moderate = settings.moderateTributes !== false;
+    // Global policy: all tributes are auto-approved regardless of moderation setting
     const tribute = await prisma.tribute.create({
-      data: { memorialId: memorial.id, authorName: body.authorName, message: body.message, approved: !moderate },
+      data: { memorialId: memorial.id, authorName: body.authorName, message: body.message, approved: true },
     });
-    res.status(201).json({ success: true, data: { ...tribute, pending: moderate } });
+    res.status(201).json({ success: true, data: { ...tribute, pending: false } });
   } catch (error) {
     if (isZodError(error)) return res.status(400).json({ success: false, message: error.errors[0].message });
     res.status(500).json({ success: false, message: 'Failed to submit tribute' });
