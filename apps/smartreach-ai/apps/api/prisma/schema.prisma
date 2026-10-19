@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String
+  name         String
+  tenants      TenantUser[]
+  refreshTokens RefreshToken[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  revoked    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Tenant {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  plan         String   @default("STARTER")
+  users        TenantUser[]
+  business     Business?
+  posts        Post[]
+  scheduledPost ScheduledPost[]
+  connections  ConnectedAccount[]
+  contentSource ContentSource[]
+  leads        Lead[]
+  stats        StatSnapshot[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model TenantUser {
+  id       String   @id @default(cuid())
+  tenantId String
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String   @default("MEMBER")
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, userId])
+}
+
+model Business {
+  id             String          @id @default(cuid())
+  tenantId       String          @unique
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  industry       String
+  website        String?
+  logoUrl        String?
+  description    String?
+  primaryColor   String          @default("#7c3aed")
+  secondaryColor String          @default("#f59e0b")
+  fonts          String          @default("Modern")
+  tone           String          @default("Friendly")
+  audience       String          @default("South Africa")
+  keywords       String          @default("[]")
+  sources        ContentSource[]
+  posts          Post[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model ContentSource {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type       String
+  label      String
+  url        String?
+  content    String?
+  enabled    Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model ConnectedAccount {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  platform   String
+  handle     String?
+  connected  Boolean  @default(true)
+  externalId String?
+  createdAt  DateTime @default(now())
+
+  @@unique([tenantId, platform])
+}
+
+model Post {
+  id          String        @id @default(cuid())
+  tenantId    String
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  businessId  String?
+  business    Business?     @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  platform    String
+  title       String?
+  body        String
+  tone        String?
+  variant     String?
+  status      String        @default("DRAFT")
+  sourceNote  String?
+  publishedAt DateTime?
+  createdBy   String?
+  scheduled   ScheduledPost?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, platform])
+}
+
+model ScheduledPost {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  postId        String   @unique
+  post          Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  publishAt     DateTime
+  status        String   @default("SCHEDULED") // SCHEDULED | PUBLISHED | FAILED | CANCELLED
+  publishedAt   DateTime?
+  externalUrl   String?
+  error         String?
+  platform      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([tenantId, status, publishAt])
+}
+
+model Lead {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  email      String
+  source     String   @default("FORM")
+  status     String   @default("NEW")
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, status])
+}
+
+model StatSnapshot {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  platform    String
+  date        DateTime @default(now())
+  reach       Int      @default(0)
+  visits      Int      @default(0)
+  clicks      Int      @default(0)
+  shares      Int      @default(0)
+  conversions Int      @default(0)
+  followers   Int      @default(0)
+  weekday     Int      // 0-6, for the Marketing Brain
+  hour        Int      // 0-23
+
+  @@index([tenantId, date])
+}

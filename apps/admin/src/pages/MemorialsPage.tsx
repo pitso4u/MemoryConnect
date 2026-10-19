@@ -1,12 +1,181 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, Memorial } from '../lib/api';
-import { Plus, Calendar, MapPin } from 'lucide-react';
+import { api, Memorial, MemorialPerformanceSummary, FuneralContactEnquiry } from '../lib/api';
+import { Plus, Calendar, MapPin, Phone, Mail, User, MessageSquare, ExternalLink, Copy, QrCode, Check, TrendingUp, Eye } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import QRPreviewModal from '../components/memorial/QRPreviewModal';
+
+function isFamilyRole(role?: string) {
+  return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
+}
+
+function isFuneralHomeAdmin(role?: string) {
+  return role === 'SUPER_ADMIN' || role === 'FUNERAL_HOME_ADMIN';
+}
+
+function milestoneFor(views: number): string | null {
+  if (views >= 1000) return '🏆';
+  if (views >= 500) return '⭐⭐⭐';
+  if (views >= 250) return '⭐⭐';
+  if (views >= 100) return '⭐';
+  return null;
+}
+
+function MemorialMilestoneBadge({ memorial }: { memorial: Memorial }) {
+  const badge = memorial.performance?.highestMilestoneAwarded || milestoneFor(memorial.performance?.total72HourViews || 0);
+  if (!badge) return null;
+  return (
+    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800" title="Memorial milestone">
+      {badge}
+    </span>
+  );
+}
+
+function TrendingMemorialsWidget() {
+  const [summary, setSummary] = useState<MemorialPerformanceSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getMemorialPerformanceSummary()
+      .then(setSummary)
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return null;
+  if (!summary || summary.trending.length === 0) return null;
+
+  return (
+    <section className="mb-8 rounded-xl border border-parchment-dark bg-white p-5">
+      <div className="flex items-center gap-2">
+        <TrendingUp size={18} className="text-gold-dark" />
+        <h2 className="font-display text-xl text-ink">Trending Memorials</h2>
+        <span className="rounded-full bg-gold/20 px-2.5 py-0.5 text-xs font-semibold text-gold-dark">72 Hour Watch</span>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {summary.trending.map((memorial) => (
+          <Link
+            key={memorial.id}
+            to={`/memorial/${memorial.id}`}
+            className="flex items-center justify-between gap-3 rounded-lg border border-parchment-dark p-3 transition hover:border-gold/40 hover:bg-parchment/40"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              {memorial.highestMilestoneAwarded && <span className="text-base">{memorial.highestMilestoneAwarded}</span>}
+              <span className="truncate text-sm font-medium text-ink">{memorial.deceasedName}</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-4">
+              <span className="flex items-center gap-1 text-xs text-muted"><Eye size={12} />{memorial.currentDayViews} views</span>
+              <span className="rounded-full bg-parchment px-2 py-0.5 text-xs font-semibold text-ink">Day {memorial.day}</span>
+              <span className={`hidden text-xs font-semibold sm:inline ${
+                summary.averages.day1Views < memorial.currentDayViews ? 'text-emerald-600' : 'text-muted'
+              }`}>{memorial.performanceRating}</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ContactEnquiriesWidget() {
+  const [enquiries, setEnquiries] = useState<FuneralContactEnquiry[]>([]);
+  const [summary, setSummary] = useState<{ NEW: number; CONTACTED: number; CLOSED: number; total: number; thisMonth: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    api.getContactEnquiries()
+      .then((data) => {
+        setEnquiries(data.enquiries);
+        setSummary(data.summary);
+      })
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return null;
+  if (!summary || summary.total === 0) return null;
+
+  return (
+    <section className="mb-8 rounded-xl border border-parchment-dark bg-white p-5">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          <MessageSquare size={18} className="text-gold-dark" />
+          <h2 className="font-display text-xl text-ink">Customer Enquiries</h2>
+        </div>
+        <div className="flex gap-3 text-sm">
+          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-amber-800 font-medium">{summary.NEW} new</span>
+          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-blue-800 font-medium">{summary.CONTACTED} contacted</span>
+          <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-green-800 font-medium">{summary.CLOSED} closed</span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="mt-4 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-parchment p-3 text-center">
+              <p className="text-xs text-muted">Total Enquiries</p>
+              <p className="font-display text-2xl text-ink">{summary.total}</p>
+            </div>
+            <div className="rounded-lg bg-parchment p-3 text-center">
+              <p className="text-xs text-muted">This Month</p>
+              <p className="font-display text-2xl text-ink">{summary.thisMonth}</p>
+            </div>
+            <div className="rounded-lg bg-parchment p-3 text-center">
+              <p className="text-xs text-muted">Conversion Rate</p>
+              <p className="font-display text-2xl text-ink">
+                {summary.total > 0 ? Math.round((summary.CLOSED / summary.total) * 100) : 0}%
+              </p>
+            </div>
+          </div>
+
+          {enquiries.slice(0, 5).map((e) => (
+            <div key={e.id} className="rounded-lg border border-parchment-dark p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <User size={14} className="text-muted" />
+                  <span className="text-sm font-medium text-ink">{e.name}</span>
+                </div>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                  e.contactStatus === 'NEW' ? 'bg-amber-100 text-amber-800' :
+                  e.contactStatus === 'CONTACTED' ? 'bg-blue-100 text-blue-800' :
+                  'bg-green-100 text-green-800'
+                }`}>{e.contactStatus}</span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted">
+                <span className="flex items-center gap-1"><Phone size={12} />{e.phone}</span>
+                {e.email && <span className="flex items-center gap-1"><Mail size={12} />{e.email}</span>}
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                Memorial: {e.memorial.deceasedName} — {new Date(e.createdAt).toLocaleDateString('en-ZA')}
+              </p>
+            </div>
+          ))}
+
+          {enquiries.length > 5 && (
+            <p className="text-center text-xs text-muted">+{enquiries.length - 5} more enquiries</p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 export default function MemorialsPage() {
+  const { user } = useAuth();
   const [memorials, setMemorials] = useState<Memorial[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState<'ALL' | 'DRAFT' | 'PAID_PENDING' | 'PUBLISHED' | 'LOCKED' | 'EXPIRED'>('ALL');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [qrModal, setQrModal] = useState<{ open: boolean; url: string; slug: string; deceasedName: string }>({
+    open: false, url: '', slug: '', deceasedName: '',
+  });
 
   useEffect(() => {
     api.getMemorials()
@@ -15,26 +184,74 @@ export default function MemorialsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
   const statusColor: Record<string, string> = {
-    draft: 'bg-amber-100 text-amber-800',
-    published: 'bg-green-100 text-green-800',
-    archived: 'bg-gray-100 text-gray-600',
+    DRAFT: 'bg-amber-100 text-amber-800',
+    PAID_PENDING: 'bg-blue-100 text-blue-800',
+    PUBLISHED: 'bg-green-100 text-green-800',
+    LOCKED: 'bg-stone-200 text-stone-700',
+    EXPIRED: 'bg-red-100 text-red-700',
+  };
+
+  const visibleMemorials = filter === 'ALL' ? memorials : memorials.filter((m) => m.status === filter);
+  const familyUser = isFamilyRole(user?.role);
+
+  const handlePreviewPublic = async (m: Memorial) => {
+    try {
+      const data = await api.getMemorialPublicUrl(m.id);
+      window.open(data.publicUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      // Fallback: open without QA token
+      window.open(`https://memoryconnect.co.za/${m.slug}`, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleCopyUrl = async (m: Memorial) => {
+    const url = `https://memoryconnect.co.za/${m.slug}`;
+    await navigator.clipboard.writeText(url);
+    setCopiedId(m.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handlePreviewQR = async (m: Memorial) => {
+    try {
+      const data = await api.getMemorialPublicUrl(m.id);
+      setQrModal({ open: true, url: data.qrCodeUrl, slug: m.slug, deceasedName: m.deceasedName });
+    } catch {
+      setQrModal({ open: true, url: `https://memoryconnect.co.za/${m.slug}`, slug: m.slug, deceasedName: m.deceasedName });
+    }
   };
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl text-ink">Memorials</h1>
-          <p className="text-muted mt-1">Manage your digital funeral programmes</p>
+          <h1 className="font-display text-3xl text-ink">{familyUser ? 'Family memorials' : 'Memorials'}</h1>
+          <p className="text-muted mt-1">{familyUser ? 'View and contribute to assigned memorials' : 'Manage your digital funeral programmes'}</p>
         </div>
-        <Link
+        {!familyUser && <Link
           to="/create"
-          className="flex items-center gap-2 px-5 py-2.5 bg-ink text-parchment rounded-lg text-sm font-medium hover:bg-ink-light transition"
+          className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-parchment transition hover:bg-ink-light"
         >
           <Plus size={18} />
           New Memorial
-        </Link>
+        </Link>}
+      </div>
+      {!familyUser && isFuneralHomeAdmin(user?.role) && <ContactEnquiriesWidget />}
+      {!familyUser && isFuneralHomeAdmin(user?.role) && <TrendingMemorialsWidget />}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {(['ALL', 'DRAFT', 'PAID_PENDING', 'PUBLISHED', 'LOCKED', 'EXPIRED'] as const).map((item) => (
+          <button
+            key={item}
+            onClick={() => setFilter(item)}
+            className={`rounded-full px-4 py-2 text-sm font-medium capitalize transition ${
+              filter === item ? 'bg-ink text-parchment' : 'bg-white text-muted hover:text-ink'
+            }`}
+          >
+            {item.replace('_', ' ').toLowerCase()}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -49,27 +266,32 @@ export default function MemorialsPage() {
             Try again
           </button>
         </div>
-      ) : memorials.length === 0 ? (
+      ) : visibleMemorials.length === 0 ? (
         <div className="text-center py-20 border-2 border-dashed border-parchment-dark rounded-xl">
-          <p className="text-muted mb-4">No memorials yet</p>
-          <Link to="/create" className="text-gold-dark hover:text-gold font-medium">
+          <p className="text-muted mb-4">{familyUser ? 'No assigned memorials yet' : 'No memorials yet'}</p>
+          {!familyUser && <Link to="/create" className="text-gold-dark hover:text-gold font-medium">
             Create your first memorial
-          </Link>
+          </Link>}
         </div>
       ) : (
         <div className="grid gap-4">
-          {memorials.map((m) => (
-            <Link
+          {visibleMemorials.map((m) => (
+            <div
               key={m.id}
-              to={`/memorial/${m.id}`}
-              className="block bg-white rounded-xl border border-parchment-dark p-6 hover:shadow-md hover:border-gold/30 transition group"
+              className="block rounded-xl border border-parchment-dark bg-white p-4 transition hover:border-gold/30 hover:shadow-md sm:p-6"
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="font-display text-xl text-ink group-hover:text-gold-dark transition">
-                    {m.deceasedName}
-                  </h2>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-muted">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link
+                    to={familyUser ? `/family/memorials/${m.id}` : `/memorial/${m.id}`}
+                    className="hover:text-gold-dark transition"
+                  >
+                    <h2 className="font-display text-xl text-ink">
+                      {m.deceasedName}
+                      <MemorialMilestoneBadge memorial={m} />
+                    </h2>
+                  </Link>
+                  <div className="mt-2 flex flex-col gap-1 text-sm text-muted sm:flex-row sm:flex-wrap sm:gap-4">
                     {m.serviceDate && (
                       <span className="flex items-center gap-1">
                         <Calendar size={14} />
@@ -90,16 +312,56 @@ export default function MemorialsPage() {
                   </div>
                 </div>
                 <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusColor[m.status] || ''}`}>
-                  {m.status}
+                  {m.status.replace('_', ' ')}
                 </span>
               </div>
-              <p className="text-xs text-muted mt-3">
+              <p className="mt-3 break-words text-xs text-muted">
                 memoryconnect.co.za/{m.slug}
+                {m.publicExpiresAt && ['PUBLISHED', 'LOCKED'].includes(m.status) && (
+                  <span className="ml-3">Viewing ends {new Date(m.publicExpiresAt).toLocaleDateString('en-ZA')}</span>
+                )}
+                <span className="ml-3">{m.viewCount || 0} views</span>
               </p>
-            </Link>
+              {isSuperAdmin && (
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-parchment-dark pt-3">
+                  <button
+                    type="button"
+                    onClick={() => handlePreviewPublic(m)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-parchment-dark px-3 py-1.5 text-xs font-medium text-muted transition hover:bg-parchment hover:text-ink"
+                  >
+                    <ExternalLink size={13} />
+                    Preview Public
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyUrl(m)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-parchment-dark px-3 py-1.5 text-xs font-medium text-muted transition hover:bg-parchment hover:text-ink"
+                  >
+                    {copiedId === m.id ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
+                    {copiedId === m.id ? 'Copied' : 'Copy URL'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePreviewQR(m)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-parchment-dark px-3 py-1.5 text-xs font-medium text-muted transition hover:bg-parchment hover:text-ink"
+                  >
+                    <QrCode size={13} />
+                    Preview QR
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
+
+      <QRPreviewModal
+        open={qrModal.open}
+        onClose={() => setQrModal({ ...qrModal, open: false })}
+        url={qrModal.url}
+        slug={qrModal.slug}
+        deceasedName={qrModal.deceasedName}
+      />
     </div>
   );
 }

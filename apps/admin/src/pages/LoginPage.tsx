@@ -2,14 +2,21 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useBrand } from '../context/BrandContext';
+
+function isFamilyRole(role?: string) {
+  return role === 'FAMILY_MANAGER' || role === 'FAMILY_CONTRIBUTOR';
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, setPendingPasswordChange } = useAuth();
+  const { brand } = useBrand();
   const navigate = useNavigate();
+  const defaultLogo = !brand.whiteLabelEnabled && !brand.logoUrl ? '/brand/memory-connect-logo-horizontal.png' : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,8 +24,13 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const data = await api.login(email, password);
+      if (data.requiresPasswordChange) {
+        setPendingPasswordChange(data.accessToken, data.user);
+        navigate('/change-password');
+        return;
+      }
       login(data.accessToken, data.user);
-      navigate('/');
+      navigate(data.user.role === 'SUPER_ADMIN' ? '/admin-owner' : isFamilyRole(data.user.role) ? '/family' : '/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -27,23 +39,24 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      <div className="hidden lg:flex lg:w-1/2 bg-ink items-center justify-center relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10"
-          style={{ backgroundImage: 'radial-gradient(circle at 30% 50%, var(--color-gold) 0%, transparent 60%)' }}
-        />
+    <div className="min-h-screen flex brand-surface">
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center relative overflow-hidden bg-[var(--brand-primary)]">
+        {brand.loginBackgroundUrl && <div className="absolute inset-0 bg-cover bg-center opacity-35" style={{ backgroundImage: `url(${brand.loginBackgroundUrl})` }} />}
         <div className="relative text-center px-12">
-          <h1 className="font-display text-5xl text-parchment mb-4">Memory Connect</h1>
-          <p className="text-parchment/70 text-lg font-light max-w-md">
+          {(brand.logoUrl || defaultLogo) && <img src={brand.logoUrl || defaultLogo || ''} alt={`${brand.companyName} logo`} className="mx-auto mb-6 max-h-20 max-w-72 rounded bg-white/95 p-2 object-contain" />}
+          <h1 className="font-display text-5xl text-[var(--brand-secondary)] mb-4">{brand.tradingName || brand.companyName}</h1>
+          <p className="text-[var(--brand-secondary)]/70 text-lg font-light max-w-md">
             Honour every life with a beautiful digital memorial experience.
           </p>
+          {!brand.whiteLabelEnabled && <p className="mt-8 text-xs text-[var(--brand-secondary)]/45">Powered by Memory Connect</p>}
         </div>
       </div>
 
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
           <div className="lg:hidden mb-8 text-center">
-            <h1 className="font-display text-3xl text-ink">Memory Connect</h1>
+            {defaultLogo && <img src={defaultLogo} alt="Memory Connect" className="mx-auto mb-4 h-auto w-52" />}
+            <h1 className="font-display text-3xl text-ink">{brand.tradingName || brand.companyName}</h1>
           </div>
 
           <h2 className="font-display text-2xl text-ink mb-1">Welcome back</h2>
@@ -81,7 +94,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-ink text-parchment rounded-lg font-medium hover:bg-ink-light transition disabled:opacity-50"
+            className="brand-button w-full py-3 font-medium transition disabled:opacity-50"
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>

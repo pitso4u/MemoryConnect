@@ -13,6 +13,9 @@ build/
 .env.local
 .env.*.local
 
+# SmartReach production secrets (never committed; injected via compose)
+smartreach.env.production.local
+
 # Logs
 logs/
 *.log
@@ -32,7 +35,10 @@ Thumbs.db
 coverage/
 
 # Prisma
-apps/api/prisma/dev.db
+apps/api/prisma/*.db
+apps/api/src/generated/
+apps/events-api/prisma/*.db
+apps/events-api/generated-client/
 
 uploads/
 

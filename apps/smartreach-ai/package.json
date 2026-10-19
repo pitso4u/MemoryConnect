@@ -1,0 +1,28 @@
+{
+  "name": "smartreach-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SmartReach AI — AI marketing automation platform. Connect your business once. AI creates, schedules, and publishes your marketing automatically.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,worker,web -c blue,magenta,green \"npm run dev -w @smartreach/api\" \"npm run dev -w @smartreach/worker\" \"npm run dev -w @smartreach/web\"",
+    "dev:api": "npm run dev -w @smartreach/api",
+    "dev:worker": "npm run dev -w @smartreach/worker",
+    "dev:web": "npm run dev -w @smartreach/web",
+    "build": "npm run build -w @smartreach/common && npm run build -w @smartreach/ai && npm run build -w @smartreach/social && npm run build -w @smartreach/scheduler && npm run build -w @smartreach/analytics && npm run build -w @smartreach/publish && npm run build -w @smartreach/api && npm run build -w @smartreach/worker && npm run build -w @smartreach/web",
+    "db:generate": "npm run db:generate -w @smartreach/api",
+    "db:push": "npm run db:push -w @smartreach/api",
+    "seed:demo": "npm run seed:demo -w @smartreach/api",
+    "typecheck": "npm run typecheck -w @smartreach/common && npm run typecheck -w @smartreach/ai && npm run typecheck -w @smartreach/api && npm run typecheck -w @smartreach/worker && npm run typecheck -w @smartreach/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

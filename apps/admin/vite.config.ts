@@ -5,6 +5,14 @@ import { networkUrlsPlugin } from '../../scripts/vite-network-urls';
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), networkUrlsPlugin('Admin Portal', 5173)],
+  optimizeDeps: {
+    include: ['@memorialconnect/shared'],
+  },
+  build: {
+    commonjsOptions: {
+      include: [/node_modules/, /packages[\\/]shared/],
+    },
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

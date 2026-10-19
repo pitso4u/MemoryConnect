@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
 import MemorialQrCode from '../components/MemorialQrCode';
+import { AuthProvider } from '../context/AuthContext';
+import { BrandProvider } from '../context/BrandContext';
 
 describe('MemorialQrCode', () => {
   const mockProps = {
@@ -10,26 +13,39 @@ describe('MemorialQrCode', () => {
     onSaveDemoUrl: async () => {},
   };
 
+  function renderQr() {
+    return render(
+      <BrowserRouter>
+        <AuthProvider>
+          <BrandProvider>
+            <MemorialQrCode {...mockProps} />
+          </BrandProvider>
+        </AuthProvider>
+      </BrowserRouter>,
+    );
+  }
+
   it('renders QR code section', () => {
-    render(<MemorialQrCode {...mockProps} />);
+    renderQr();
     expect(screen.getByText('QR Code')).toBeInTheDocument();
     expect(screen.getByText(/Guests scan this code/)).toBeInTheDocument();
   });
 
   it('renders demo network URL input', () => {
-    render(<MemorialQrCode {...mockProps} />);
+    renderQr();
     expect(screen.getByText('Demo Network URL')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/e.g. http/)).toBeInTheDocument();
   });
 
   it('renders copy and download buttons', () => {
-    render(<MemorialQrCode {...mockProps} />);
+    renderQr();
     expect(screen.getByRole('button', { name: /Copy link/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Download QR/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Download QR$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download QR Poster/i })).toBeInTheDocument();
   });
 
   it('displays memorial link with demo URL', () => {
-    render(<MemorialQrCode {...mockProps} />);
+    renderQr();
     const link = screen.getByText(/http:\/\/192\.168\.1\.100:5174/);
     expect(link).toBeInTheDocument();
   });

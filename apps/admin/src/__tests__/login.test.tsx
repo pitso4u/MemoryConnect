@@ -3,12 +3,15 @@ import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import LoginPage from '../pages/LoginPage';
 import { AuthProvider } from '../context/AuthContext';
+import { BrandProvider } from '../context/BrandContext';
 
 function renderLogin() {
   return render(
     <BrowserRouter>
       <AuthProvider>
-        <LoginPage />
+        <BrandProvider>
+          <LoginPage />
+        </BrandProvider>
       </AuthProvider>
     </BrowserRouter>,
   );

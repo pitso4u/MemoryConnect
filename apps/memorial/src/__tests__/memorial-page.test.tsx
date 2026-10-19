@@ -16,7 +16,9 @@ describe('MemorialPage', () => {
       id: 'memorial-1',
       slug: 'test-slug',
       deceasedName: 'David Mokoena',
-      status: 'published',
+      status: 'PUBLISHED',
+      paymentStatus: 'SUCCESS',
+      viewCount: 0,
       programme: [],
       currentProgrammeIndex: 0,
       announcements: [],
@@ -45,6 +47,8 @@ describe('MemorialPage', () => {
       updatedAt: '2026-06-29T00:00:00.000Z',
     };
     const getMemorial = vi.spyOn(api, 'getMemorial').mockResolvedValue(memorial);
+    vi.spyOn(api, 'getTributes').mockResolvedValue({ tributes: [], nextCursor: null });
+    vi.spyOn(api, 'recordMemorialView').mockResolvedValue({ counted: true, viewCount: 0 });
 
     const view = render(
       <MemoryRouter initialEntries={['/test-slug']}>
@@ -68,6 +72,9 @@ describe('MemorialPage', () => {
   });
 
   it('renders loading state', () => {
+    const getMemorial = vi.spyOn(api, 'getMemorial').mockImplementation(() => new Promise(() => {}));
+    vi.spyOn(api, 'getTributes').mockResolvedValue({ tributes: [], nextCursor: null });
+    vi.spyOn(api, 'recordMemorialView').mockResolvedValue({ counted: true, viewCount: 0 });
     render(
       <MemoryRouter initialEntries={['/test-slug']}>
         <Routes>
@@ -76,5 +83,6 @@ describe('MemorialPage', () => {
       </MemoryRouter>
     );
     expect(screen.getByText('Loading memorial...')).toBeInTheDocument();
+    getMemorial.mockRestore();
   });
 });

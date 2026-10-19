@@ -1,26 +1,38 @@
 import { useRef, useState, useEffect } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Copy, Download, Check, Wifi } from 'lucide-react';
-import { getMemorialBaseUrl, memorialPageUrl } from '../lib/config';
+import { Copy, Download, Check, Wifi, FileText } from 'lucide-react';
+import { getMemorialBaseUrl, memorialPageUrl, memorialPosterUrl } from '../lib/config';
+import { useBrand } from '../context/BrandContext';
+import QRPosterModal from './memorial/QRPosterModal';
 
 interface MemorialQrCodeProps {
   slug: string;
   deceasedName: string;
+  deceasedPhotoUrl?: string | null;
   demoNetworkUrl?: string;
   onSaveDemoUrl: (url: string) => Promise<void>;
+  serviceDate?: string | null;
+  serviceVenue?: string | null;
+  timezone?: string | null;
 }
 
 export default function MemorialQrCode({
   slug,
   deceasedName,
+  deceasedPhotoUrl,
   demoNetworkUrl,
   onSaveDemoUrl,
+  serviceDate,
+  serviceVenue,
+  timezone,
 }: MemorialQrCodeProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [demoUrlInput, setDemoUrlInput] = useState(demoNetworkUrl || '');
   const [savingDemo, setSavingDemo] = useState(false);
   const [demoSaved, setDemoSaved] = useState(false);
+  const [posterOpen, setPosterOpen] = useState(false);
+  const { brand } = useBrand();
 
   useEffect(() => {
     setDemoUrlInput(demoNetworkUrl || '');
@@ -128,10 +140,18 @@ export default function MemorialQrCode({
             <button
               type="button"
               onClick={downloadQr}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-ink text-parchment rounded-lg text-sm hover:bg-ink-light transition"
+              className="inline-flex items-center gap-2 px-4 py-2 border border-parchment-dark rounded-lg text-sm hover:bg-parchment transition"
             >
               <Download size={16} />
               Download QR
+            </button>
+            <button
+              type="button"
+              onClick={() => setPosterOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-ink text-parchment rounded-lg text-sm hover:bg-ink-light transition"
+            >
+              <FileText size={16} />
+              Download QR Poster
             </button>
           </div>
 
@@ -143,6 +163,14 @@ export default function MemorialQrCode({
           )}
         </div>
       </div>
+
+      <QRPosterModal
+        open={posterOpen}
+        onClose={() => setPosterOpen(false)}
+        memorial={{ slug, deceasedName, serviceDate, serviceVenue, timezone, portraitUrl: deceasedPhotoUrl }}
+        url={memorialPosterUrl(slug)}
+        brand={brand}
+      />
     </div>
   );
 }

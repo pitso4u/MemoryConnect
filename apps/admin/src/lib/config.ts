@@ -8,6 +8,10 @@ export function getApiUrl(): string {
     return fromEnv.replace(/\/api\/?$/, '').replace(/\/$/, '');
   }
   if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname.includes('memoryconnect.co.za')) {
+      return `${window.location.protocol}//api.memoryconnect.co.za`;
+    }
     return `${window.location.protocol}//${window.location.hostname}:${API_PORT}`;
   }
   return `http://localhost:${API_PORT}`;
@@ -22,6 +26,10 @@ export function getMemorialBaseUrl(demoNetworkUrl?: string): string {
   if (fromEnv) return fromEnv.replace(/\/$/, '');
 
   if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname.includes('memoryconnect.co.za')) {
+      return `${window.location.protocol}//memoryconnect.co.za`;
+    }
     return `${window.location.protocol}//${window.location.hostname}:${MEMORIAL_PORT}`;
   }
   return `http://localhost:${MEMORIAL_PORT}`;
@@ -29,4 +37,18 @@ export function getMemorialBaseUrl(demoNetworkUrl?: string): string {
 
 export function memorialPageUrl(slug: string, demoNetworkUrl?: string): string {
   return `${getMemorialBaseUrl(demoNetworkUrl)}/${slug}`;
+}
+
+/**
+ * Canonical public base URL used for QR posters and shareable links.
+ * Never falls back to localhost: guests must be able to open the link.
+ */
+export function getPosterBaseUrl(): string {
+  const fromEnv = import.meta.env.VITE_MEMORIAL_URL;
+  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  return 'https://memoryconnect.co.za';
+}
+
+export function memorialPosterUrl(slug: string): string {
+  return `${getPosterBaseUrl()}/${slug}`;
 }

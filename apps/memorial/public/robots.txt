@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Allow: /demo
+Allow: /*$
+Disallow: /api/
+Disallow: /*/projector
+Disallow: /*?preview=
+
+Sitemap: https://memoryconnect.co.za/sitemap.xml

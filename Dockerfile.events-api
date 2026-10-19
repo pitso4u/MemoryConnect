@@ -1,0 +1,44 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY apps/events-api/package*.json apps/events-api/
+COPY packages packages
+
+RUN npm install
+
+COPY . .
+
+RUN npm run build -w @memorialconnect/event-shared
+RUN npx prisma generate --schema=apps/events-api/prisma/schema.prisma
+RUN npm run build -w @memorialconnect/events-api
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY package*.json ./
+COPY apps/events-api/package*.json apps/events-api/
+COPY packages packages
+
+RUN npm install --omit=dev
+
+COPY --from=builder /app/packages/event-shared/dist packages/event-shared/dist
+COPY --from=builder /app/apps/events-api/dist apps/events-api/dist
+COPY --from=builder /app/apps/events-api/prisma apps/events-api/prisma
+COPY --from=builder /app/apps/events-api/generated-client apps/events-api/generated-client
+
+WORKDIR /app/apps/events-api
+
+EXPOSE 4101
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:4101/health || exit 1
+
+# Isolated Events database (/data/events.db via events_db_data volume) and
+# uploads (/app/uploads via events_uploads_data volume). Never touches
+# memoryconnect.db or Memorial uploads.
+CMD ["sh", "-c", "npx prisma db push --schema=prisma/schema.prisma && node dist/index.js"]
