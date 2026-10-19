@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client-js"
+  // Isolated output so generating the Events client never overwrites the
+  // Memorial client's hoisted @prisma/client (and vice versa). Lives outside
+  // src/ so tsc dist output can require it unchanged in dev and production.
+  output   = "../generated-client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("EVENTS_DATABASE_URL")
+}
+
+// Independent Events product database. No references to Memorial models.
+// Development: events.db (local file). Production target: /data/events.db
+
+model Organiser {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  status    String   @default("ACTIVE")
+  suspendedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+  events    Event[]
+  auditLogs PlatformAuditLog[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         String    @default("ORGANISER")
+  organiserId  String
+  organiser    Organiser @relation(fields: [organiserId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  auditLogs    PlatformAuditLog[]
+
+  @@index([organiserId])
+}
+
+model PlatformAuditLog {
+  id          String    @id @default(cuid())
+  actorUserId String?
+  actor       User?     @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  organiserId String?
+  organiser   Organiser? @relation(fields: [organiserId], references: [id], onDelete: SetNull)
+  action      String
+  targetType  String
+  targetId    String
+  details     String?
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([targetType, targetId])
+}
+
+model Event {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  organiserId   String
+  organiser     Organiser @relation(fields: [organiserId], references: [id], onDelete: Cascade)
+  eventType     String
+  title         String
+  description   String?
+  hostName      String?
+  startDateTime DateTime?
+  endDateTime   DateTime?
+  timezone      String   @default("Africa/Johannesburg")
+  status        String   @default("DRAFT")
+  visibility    String   @default("PUBLIC")
+  // Showcase example events linked from the landing page. Demo events are
+  // always PUBLISHED + UNLISTED, never expire, and reject guest messages.
+  isDemo        Boolean  @default(false)
+  coverImage    String?
+  theme         String   @default("CELEBRATION")
+  viewCount     Int      @default(0)
+  publishedAt   DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  photos    EventPhoto[]
+  messages  EventMessage[]
+  locations EventLocation[]
+  agenda    EventAgendaItem[]
+  views     EventView[]
+  analytics AnalyticsEvent[]
+  payments  EventPayment[]
+  performance EventPerformance?
+
+  @@index([organiserId, status])
+  @@index([status])
+}
+
+model EventPhoto {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  url       String
+  caption   String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([eventId, order])
+}
+
+model EventMessage {
+  id         String   @id @default(cuid())
+  eventId    String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  authorName String
+  message    String
+  approved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([eventId, approved, createdAt])
+}
+
+model EventLocation {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name      String
+  address   String?
+  latitude  Float?
+  longitude Float?
+  notes     String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([eventId, order])
+}
+
+model EventAgendaItem {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  startTime   String?
+  endTime     String?
+  location    String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([eventId, order])
+}
+
+model EventView {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  visitorHash String
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@unique([eventId, visitorHash])
+  @@index([eventId, createdAt])
+}
+
+model AnalyticsEvent {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type        String
+  visitorHash String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  @@index([eventId, createdAt])
+  @@index([type, createdAt])
+}
+
+// ── 72-Hour Event Performance Analytics ────────────────────────────────────────
+// Mirrors MemorialConnect's MemorialPerformance model, adapted for Events.
+// Tracks views, unique visitors, QR scans and shares across three 24-hour
+// windows following publication, then finalises a frozen snapshot.
+
+model EventPerformance {
+  id            String   @id @default(cuid())
+  eventId       String   @unique
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  day1Views     Int      @default(0)
+  day2Views     Int      @default(0)
+  day3Views     Int      @default(0)
+  day1UniqueVisitors Int  @default(0)
+  day2UniqueVisitors Int  @default(0)
+  day3UniqueVisitors Int  @default(0)
+  day1QrScans   Int      @default(0)
+  day2QrScans   Int      @default(0)
+  day3QrScans   Int      @default(0)
+  day1Shares    Int      @default(0)
+  day2Shares    Int      @default(0)
+  day3Shares    Int      @default(0)
+  total72HourViews Int   @default(0)
+  performanceRating  String?
+  highestDailyViews  Int  @default(0)
+  highestMilestoneAwarded String?
+  milestones    Json?
+  finalized     Boolean  @default(false)
+  finalizedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([eventId])
+  @@map("EventPerformance")
+}
+
+// Events publishing payments are kept in the Events database and never share
+// Memorial payment records. Provider credentials use EVENTS_PAYSTACK_SECRET_KEY.
+model EventPayment {
+  id         String    @id @default(cuid())
+  eventId    String
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  purpose    String    @default("EVENT_PUBLISH")
+  status     String    @default("PENDING")
+  amountCents Int      @default(29999)
+  currency   String    @default("ZAR")
+  providerRef String?  @unique
+  checkoutKey String?  @unique
+  authorizationUrl String?
+  paidAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([eventId, status])
+}

@@ -17,6 +17,8 @@
     "reset:test-data": "tsx src/scripts/reset-test-data.ts",
     "reset:test-data:dry-run": "tsx src/scripts/reset-test-data.ts --dry-run",
     "reset:test-data:confirm": "tsx src/scripts/reset-test-data.ts --confirm",
+    "add:owner-credits": "tsx src/scripts/add-owner-credits.ts",
+    "add:owner-credits:dry-run": "tsx src/scripts/add-owner-credits.ts --dry-run",
     "test": "vitest"
   },
   "dependencies": {

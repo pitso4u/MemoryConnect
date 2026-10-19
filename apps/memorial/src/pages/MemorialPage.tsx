@@ -525,7 +525,7 @@ export default function MemorialPage() {
         )}
 
         {activeSection === 'tributes' && memorial.settings.showTributeWall !== false && (
-          <TributeSection slug={memorial.slug} tributes={memorial.tributes} />
+          <TributeSection slug={memorial.slug} />
         )}
 
         {activeSection === 'feedback' && (
@@ -783,11 +783,35 @@ function FuneralFeedbackSection({ slug }: { slug: string }) {
   );
 }
 
-function TributeSection({ slug, tributes }: { slug: string; tributes: { id: string; authorName: string; message: string }[] }) {
+function TributeSection({ slug }: { slug: string }) {
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [tributes, setTributes] = useState<{ id: string; authorName: string; message: string; createdAt: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const fetchTributes = async () => {
+      try {
+        const result = await api.getTributes(slug);
+        if (active) {
+          setTributes(result.tributes);
+        }
+      } catch (err) {
+        if (active) {
+          console.error('Failed to load tributes:', err);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+    fetchTributes();
+    return () => { active = false; };
+  }, [slug]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -798,20 +822,56 @@ function TributeSection({ slug, tributes }: { slug: string; tributes: { id: stri
       if (!result.pending) {
         setName('');
         setMessage('');
+        // Refresh the tribute list after successful submission
+        const result = await api.getTributes(slug);
+        setTributes(result.tributes);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit');
     }
   };
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-ZA', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-white/5 rounded-lg p-4 animate-pulse">
+          <div className="h-4 bg-white/10 rounded w-3/4 mb-2"></div>
+          <div className="h-3 bg-white/10 rounded w-1/2"></div>
+        </div>
+        <div className="bg-white/5 rounded-lg p-4 animate-pulse">
+          <div className="h-4 bg-white/10 rounded w-1/2 mb-2"></div>
+          <div className="h-3 bg-white/10 rounded w-3/4"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {tributes.map((t) => (
-        <div key={t.id} className="bg-white/5 rounded-lg p-4">
-          <p className="text-sm font-medium text-[var(--brand-accent)]">{t.authorName}</p>
-          <p className="text-sm text-[var(--brand-text)]/75 mt-1">{t.message}</p>
-        </div>
-      ))}
+      {tributes.length === 0 ? (
+        <p className="text-center text-[var(--brand-text)]/60 py-8 text-sm">
+          No tributes yet. Be the first to leave one.
+        </p>
+      ) : (
+        tributes.map((t) => (
+          <div key={t.id} className="bg-white/5 rounded-lg p-4">
+            <p className="text-sm font-medium text-[var(--brand-accent)]">{t.authorName}</p>
+            <p className="text-sm text-[var(--brand-text)]/75 mt-1">{t.message}</p>
+            <p className="text-xs text-[var(--brand-text)]/45 mt-2">{formatDate(t.createdAt)}</p>
+          </div>
+        ))
+      )}
 
       {!submitted ? (
         <form onSubmit={handleSubmit} className="bg-white/5 rounded-xl p-5 space-y-3">

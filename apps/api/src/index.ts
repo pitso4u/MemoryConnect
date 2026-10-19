@@ -53,9 +53,13 @@ function buildCorsOrigin():
   const defaults = [
     env.ADMIN_URL || 'http://localhost:5173',
     env.MEMORIAL_URL || 'http://localhost:5174',
+    env.CRM_URL || 'http://localhost:5176',
   ];
 
-  // Parse comma-separated origins
+  // Parse comma-separated origins. Note: the cors library will not echo back
+  // `Access-Control-Allow-Origin` for origins that are not in this list, so
+  // any production frontend the API needs to serve must be listed either as
+  // a default (ADMIN_URL/MEMORIAL_URL/CRM_URL) or here.
   const extra = corsEnv && corsEnv !== '*'
     ? corsEnv.split(',').map((s) => s.trim()).filter(Boolean)
     : [];

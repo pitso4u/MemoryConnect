@@ -31,6 +31,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   ADMIN_URL: z.string().optional(),
   MEMORIAL_URL: z.string().optional(),
+  CRM_URL: z.string().optional(),
   PAYSTACK_SECRET_KEY: z.string().optional(),
   AUTH_RATE_LIMIT_WINDOW_MS: z.string().transform(Number).pipe(z.number().int().positive()).default('900000'),
   AUTH_RATE_LIMIT_MAX: z.string().transform(Number).pipe(z.number().int().positive()).optional(),

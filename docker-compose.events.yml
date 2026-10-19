@@ -1,0 +1,56 @@
+# Events staging/production overlay. Applied WITHOUT modifying
+# docker-compose.prod.yml or any Memorial service:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.events.yml \
+#     up -d --build memoryconnect-events-api memoryconnect-events-web
+#
+# Isolation: own containers, own named volumes (never ./data), own env file,
+# own JWT secret, own Traefik routers. Rollback = `docker compose ... stop`
+# these two services (documented in apps/events-api/DEPLOYMENT.md).
+
+services:
+  memoryconnect-events-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.events-api
+    container_name: memoryconnect-events-api
+    restart: unless-stopped
+    env_file:
+      - events.env.production
+    environment:
+      EVENTS_JWT_SECRET: ${EVENTS_JWT_SECRET:?set EVENTS_JWT_SECRET in an untracked .env on the VM}
+      EVENTS_PAYSTACK_SECRET_KEY: ${EVENTS_PAYSTACK_SECRET_KEY:-}
+    volumes:
+      - events_db_data:/data
+      - events_uploads_data:/app/uploads
+    networks:
+      - infrastructure_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memoryconnect-events-api.rule=Host(`events-api.memoryconnect.co.za`)"
+      - "traefik.http.routers.memoryconnect-events-api.entrypoints=web,websecure"
+      - "traefik.http.routers.memoryconnect-events-api.tls=true"
+      - "traefik.http.services.memoryconnect-events-api.loadbalancer.server.port=4101"
+
+  memoryconnect-events-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.events-web
+    container_name: memoryconnect-events-web
+    restart: unless-stopped
+    networks:
+      - infrastructure_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memoryconnect-events-web.rule=Host(`events.memoryconnect.co.za`)"
+      - "traefik.http.routers.memoryconnect-events-web.entrypoints=web,websecure"
+      - "traefik.http.routers.memoryconnect-events-web.tls=true"
+      - "traefik.http.services.memoryconnect-events-web.loadbalancer.server.port=80"
+
+volumes:
+  events_db_data:
+  events_uploads_data:
+
+networks:
+  infrastructure_default:
+    external: true

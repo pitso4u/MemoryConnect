@@ -22,6 +22,7 @@ import { computeEntitlement, canPublishFree } from '../lib/entitlement';
 import { getPlatformSettings } from '../lib/platformSettings';
 import { permanentlyDeleteMemorial } from '../lib/retention';
 import { isZodError } from '../lib/validation';
+import { localDateTimeToUTC } from '../lib/timezone';
 import { brandFromFuneralHome } from '@memorialconnect/shared';
 import { ensureUploadsDir, photoPublicUrl } from '../lib/uploads';
 import {
@@ -167,7 +168,9 @@ router.post('/', authenticate, async (req, res) => {
         deceasedName: body.deceasedName,
         dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : null,
         dateOfDeath: body.dateOfDeath ? new Date(body.dateOfDeath) : null,
-        serviceDate: body.serviceDate ? new Date(body.serviceDate) : null,
+        serviceDate: body.serviceDate
+  ? localDateTimeToUTC(body.serviceDate, body.timezone || 'Africa/Johannesburg')
+  : null,
         serviceEndTime: body.serviceEndTime || undefined,
         serviceVenue: body.serviceVenue,
         timezone: body.timezone || undefined,
@@ -612,7 +615,12 @@ router.patch('/:id', authenticate, async (req, res) => {
         settings: settings as any | undefined,
         dateOfBirth: body.dateOfBirth !== undefined ? body.dateOfBirth ? new Date(body.dateOfBirth) : null : undefined,
         dateOfDeath: body.dateOfDeath !== undefined ? body.dateOfDeath ? new Date(body.dateOfDeath) : null : undefined,
-        serviceDate: body.serviceDate !== undefined ? body.serviceDate ? new Date(body.serviceDate) : null : undefined,
+        serviceDate:
+        body.serviceDate !== undefined
+          ? body.serviceDate
+            ? localDateTimeToUTC(body.serviceDate, body.timezone || 'Africa/Johannesburg')
+            : null
+          : undefined,
         timezone: body.timezone !== undefined ? (body.timezone || undefined) : undefined,
         serviceEndTime: body.serviceEndTime !== undefined ? (body.serviceEndTime || undefined) : undefined,
       },

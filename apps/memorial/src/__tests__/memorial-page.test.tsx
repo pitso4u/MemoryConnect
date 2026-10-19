@@ -47,6 +47,7 @@ describe('MemorialPage', () => {
       updatedAt: '2026-06-29T00:00:00.000Z',
     };
     const getMemorial = vi.spyOn(api, 'getMemorial').mockResolvedValue(memorial);
+    vi.spyOn(api, 'getTributes').mockResolvedValue({ tributes: [], nextCursor: null });
     vi.spyOn(api, 'recordMemorialView').mockResolvedValue({ counted: true, viewCount: 0 });
 
     const view = render(
@@ -72,6 +73,7 @@ describe('MemorialPage', () => {
 
   it('renders loading state', () => {
     const getMemorial = vi.spyOn(api, 'getMemorial').mockImplementation(() => new Promise(() => {}));
+    vi.spyOn(api, 'getTributes').mockResolvedValue({ tributes: [], nextCursor: null });
     vi.spyOn(api, 'recordMemorialView').mockResolvedValue({ counted: true, viewCount: 0 });
     render(
       <MemoryRouter initialEntries={['/test-slug']}>

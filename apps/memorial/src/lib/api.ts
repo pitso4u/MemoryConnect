@@ -91,7 +91,17 @@ export interface ProjectorData {
   funeralHome?: PublicMemorial['funeralHome'];
 }
 
-export type { ProgrammeItem, Photo, Tribute, Announcement, MemorialLocation, BrandProfile };
+export interface PublicTribute {
+  id: string;
+  authorName: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface TributesResponse {
+  tributes: PublicTribute[];
+  nextCursor: string | null;
+}
 
 export const api = {
   getMemorial: (slug: string, previewToken?: string) => request<PublicMemorial>(`/api/v1/public/memorials/${slug}${previewToken ? `?preview=${encodeURIComponent(previewToken)}` : ''}`),
@@ -116,6 +126,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  getTributes: (slug: string) =>
+    request<TributesResponse>(`/api/v1/public/memorials/${slug}/tributes`),
   submitFeedback: (slug: string, data: FuneralFeedbackInput) =>
     request<{ id: string }>(`/api/v1/public/memorials/${slug}/feedback`, {
       method: 'POST',

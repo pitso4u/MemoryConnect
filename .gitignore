@@ -37,6 +37,8 @@ coverage/
 # Prisma
 apps/api/prisma/*.db
 apps/api/src/generated/
+apps/events-api/prisma/*.db
+apps/events-api/generated-client/
 
 uploads/
 
